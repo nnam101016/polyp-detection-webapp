@@ -1,5 +1,8 @@
 numpy
 streamlit
-Pillow
+pillow
 keras
 tensorflow
+torch
+torchvision
+ultralytics

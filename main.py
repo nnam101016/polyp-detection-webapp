@@ -1,67 +1,56 @@
+# polyp_detect_app.py
 import streamlit as st
-import pandas as pd
-import tensorflow as tf
-from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
-import h5py  # Library for editing HDF5 files
-from util import set_background
+from ultralytics import YOLO          # ← Ultralytics loader
+from util import set_background        # your helper for the BG image
 
-# Function to remove 'groups' key from the model config in H5 file
-def fix_h5_file(h5_path):
-    with h5py.File(h5_path, mode="r+") as f:
-        model_config_string = f.attrs.get("model_config")
-        if model_config_string and '"groups": 1,' in model_config_string:
-            model_config_string = model_config_string.replace('"groups": 1,', '')
-            f.attrs.modify('model_config', model_config_string)
-            f.flush()
-            assert '"groups": 1,' not in f.attrs.get("model_config")
+# ── 1. Load YOLOv8 model ──────────────────────────────────────────
+MODEL_PATH = "model/pest.pt"           # adjust path if needed
+model = YOLO(MODEL_PATH)               # <-- nothing else required
+model.fuse()                           # optional: a tiny speed boost
 
-# Path to the model file
-MODEL_PATH = "model\polyp_classifier.h5"  # Update the path if needed
+# ── 2. Streamlit UI ───────────────────────────────────────────────
+set_background("./bgs/bg2.avif")       # optional aesthetic
+st.title("Polyp Detection (YOLO v8)")
+st.header("Upload an endoscopy frame and get detections")
 
-# Apply fix before loading
-fix_h5_file(MODEL_PATH)
+file = st.file_uploader(
+    "Choose a JPG / PNG", type=["jpg", "jpeg", "png"]
+)
 
-# Load the modified model
-model = load_model(MODEL_PATH, compile=False)
+if file is not None:
+    pil_img = Image.open(file).convert("RGB")
+    st.image(pil_img, caption="Uploaded image", use_container_width=True)
 
-# Preprocessing function
-def preprocess_image(image, target_size):
-    image = image.resize(target_size)
-    image = np.array(image) / 255.0  # Normalize
-    image = np.expand_dims(image, axis=0)  # Add batch dimension
-    return image
+    # ── 3. Inference ────────────────────────────────────────────
+    # convert PIL → ndarray for Ultralytics
+    img = np.array(pil_img)
 
-# Streamlit UI
-set_background('./bgs/bg2.avif')
-st.title('Polyp classification')
-st.header("Upload an image and let the model predict!")
+    # predict() returns a list; we take first (and only) result
+    res = model.predict(
+        source=img,
+        imgsz=640,        # inference size (can match training size)
+        conf=0.25,        # confidence threshold
+        verbose=False,
+        stream=False
+    )[0]
 
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+    # ── 4. Show annotated image ────────────────────────────────
+    annotated = res.plot()            # draws boxes + labels on copy
+    st.image(annotated, caption="Detections", use_container_width=True)
 
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_container_width=True)
-
-    # Dictionary to map labels to meaningful names
-    class_labels = {0: "Negative", 1: "Positive"}
-
-    # Preprocess image
-    processed_image = preprocess_image(image, target_size=(224, 224))  # Adjust based on model input size
-
-    # Get predictions
-    predictions = model.predict(processed_image)
-
-    # Define class labels
-    class_labels = np.array(["Negative", "Positive"])
-
-    # Convert predictions into a labeled DataFrame
-    df = pd.DataFrame(predictions, columns=class_labels)
-
-    # Convert DataFrame to styled HTML table without the index column
-    html_table = df.style.hide(axis="index").to_html()
-
-    # Display results in Streamlit using HTML
-    st.write("**Prediction Results:**", unsafe_allow_html=True)
-    st.write(html_table, unsafe_allow_html=True)
+    # ── 5. Print table of detections ───────────────────────────
+    if res.boxes:
+        st.subheader("Detected objects")
+        for box in res.boxes:
+            cls_id   = int(box.cls[0])
+            conf     = float(box.conf[0])
+            label    = model.names[cls_id]
+            xyxy     = box.xyxy[0].cpu().tolist()  # [x1,y1,x2,y2]
+            st.write(
+                f"• **{label}** – {conf:.2%}  |  "
+                f"bbox: {list(map(int, xyxy))}"
+            )
+    else:
+        st.info("No objects detected above the confidence threshold.")
