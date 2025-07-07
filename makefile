@@ -2,7 +2,7 @@
 
 INSTALLED_LIBS := $(shell pip list --format=freeze)
 # get installed libraries in the host computer in freeze format
-REQUIRED_LIBS = tensorflow pandas numpy h5py pillow nicegui streamlit
+REQUIRED_LIBS := $(shell type requirements.txt) 
 # list of required libraries, add more as needed
 NEEDED_LIBS = $(foreach lib,$(REQUIRED_LIBS),$(if $(findstring $(lib),$(INSTALLED_LIBS)),,$(lib)))
 # list of required libraries that are not installed
@@ -19,13 +19,17 @@ install: #install the missing libraries
         && pip install $(NEEDED_LIBS) \
     )
 
-run_gui: install #run the app after installing the missing libraries
-	@echo Opening NiceGui app...
-	python ".\main_gui.py"
-#NiceGui app is run by python main_gui.py --- main app 
+run_react: install #run the app after installing the missing libraries
+	@echo Opening React app...
+	cd endo_react && npm start
 
 run_streamlit: install #run the app after installing the missing libraries
-	@echo Opening Streamlit app...	
+	@echo Opening Streamlit demo app...	
 	streamlit run ".\main_stream.py"
+
+bundle_react: 
+	@echo Bundling React app...
+	cd react && npm run build
+	@echo React app bundled successfully.
 
 #streamlit run Main.py	--- prototyping layout
