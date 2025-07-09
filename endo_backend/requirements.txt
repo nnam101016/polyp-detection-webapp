@@ -1,0 +1,12 @@
+numpy
+pillow
+keras
+tensorflow
+pandas
+fastapi
+uvicorn
+python-multipart
+boto3
+pymongo
+python-jose
+passlib[bcrypt]
