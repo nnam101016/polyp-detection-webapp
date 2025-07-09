@@ -2,7 +2,7 @@
 
 INSTALLED_LIBS := $(shell pip list --format=freeze)
 # get installed libraries in the host computer in freeze format
-REQUIRED_LIBS := $(shell type requirements.txt) 
+REQUIRED_LIBS := $(shell type .\endo_backend\requirements.txt) 
 # list of required libraries, add more as needed
 NEEDED_LIBS = $(foreach lib,$(REQUIRED_LIBS),$(if $(findstring $(lib),$(INSTALLED_LIBS)),,$(lib)))
 # list of required libraries that are not installed
@@ -21,15 +21,11 @@ install: #install the missing libraries
 
 run_react: install #run the app after installing the missing libraries
 	@echo Opening React app...
-	cd endo_react && npm start
-
-run_streamlit: install #run the app after installing the missing libraries
-	@echo Opening Streamlit demo app...	
-	streamlit run ".\main_stream.py"
-
+	cd endo_frontend && npm start
+	
 bundle_react: 
 	@echo Bundling React app...
-	cd react && npm run build
+	cd endo_frontend && npm run build
 	@echo React app bundled successfully.
 
 #streamlit run Main.py	--- prototyping layout
