@@ -10,3 +10,4 @@ boto3
 pymongo
 python-jose
 passlib[bcrypt]
+python-dotenv
