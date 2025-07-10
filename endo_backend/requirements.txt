@@ -11,3 +11,6 @@ pymongo
 python-jose
 passlib[bcrypt]
 python-dotenv
+torch
+torchvision
+ultralytics

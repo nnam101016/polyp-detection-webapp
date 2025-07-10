@@ -2,13 +2,28 @@ import React, { useState } from "react";
 
 function App() {
   const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [patientName, setPatientName] = useState("");
   const [patientId, setPatientId] = useState("");
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [s3Url, setS3Url] = useState("");
+  const [processedS3Url, setProcessedS3Url] = useState(""); // ✅ NEW
+  const [result, setResult] = useState("");
 
-  const backendUrl = "http://127.0.0.1:8000"; // Adjust if needed
+  const backendUrl = "http://127.0.0.1:8000";
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    setFile(selectedFile);
+
+    if (selectedFile) {
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl("");
+    }
+  };
 
   const upload = async () => {
     if (!file) {
@@ -23,6 +38,9 @@ function App() {
     formData.append("notes", notes);
 
     setMessage("Uploading...");
+    setResult("");
+    setS3Url("");
+    setProcessedS3Url(""); // ✅ clear previous
 
     try {
       const res = await fetch(`${backendUrl}/upload`, {
@@ -34,7 +52,9 @@ function App() {
 
       if (res.ok) {
         setS3Url(data.s3_url);
+        setProcessedS3Url(data.processed_s3_url); // ✅ set processed image
         setMessage(data.message);
+        setResult(data.result);
       } else {
         setMessage(data.detail || "Upload failed.");
       }
@@ -52,7 +72,7 @@ function App() {
           <label className="block mb-1 font-semibold">Select Image</label>
           <input
             type="file"
-            onChange={(e) => setFile(e.target.files[0])}
+            onChange={handleFileChange}
             className="border p-2 w-full"
           />
         </div>
@@ -87,23 +107,41 @@ function App() {
           onClick={upload}
           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
         >
-          Upload Scan
+          Scan
         </button>
       </div>
 
-      {message && (
+      {previewUrl && (
+        <div className="mt-6 text-center">
+          <p className="font-semibold mb-2">Uploaded Image Preview:</p>
+          <img src={previewUrl} alt="Preview" className="max-w-xs rounded border" />
+        </div>
+      )}
+
+      {processedS3Url && (
+        <div className="mt-6 text-center">
+          <p className="font-semibold mb-2">Processed Image with Detections:</p>
+          <img src={processedS3Url} alt="Detections" className="max-w-xs rounded border" />
+          <a
+            href={processedS3Url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline block mt-2"
+          >
+            View Processed Image
+          </a>
+        </div>
+      )}
+
+      {result && (
         <div className="mt-4 text-center">
+          <p className="text-green-600 font-bold">Scan Result: {result}</p>
+        </div>
+      )}
+
+      {message && (
+        <div className="mt-2 text-center">
           <p className="text-gray-800">{message}</p>
-          {s3Url && (
-            <a
-              href={s3Url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline block mt-2"
-            >
-              View Uploaded File
-            </a>
-          )}
         </div>
       )}
     </div>
