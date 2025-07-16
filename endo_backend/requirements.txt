@@ -14,3 +14,6 @@ python-dotenv
 torch
 torchvision
 ultralytics
+pymongo[srv]
+pydantic[email]
+motor
