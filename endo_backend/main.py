@@ -2,8 +2,9 @@ from datetime import datetime, timedelta
 from PIL import Image
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from typing import List
 from passlib.context import CryptContext
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, Form, File
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from pymongo import MongoClient
@@ -32,6 +33,17 @@ users_collection = db["users"]
 app = FastAPI()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+# CORS setup
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -111,90 +123,126 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return user
 
-# Profile route
+# Profile
 @app.get("/profile")
 async def read_profile(current_user: dict = Depends(get_current_user)):
     return {
-        "email": current_user["email"],
-        "user_id": str(current_user["_id"]), 
-        "created_at": current_user["created_at"]
+        "email": current_user.get("email"),
+        "user_id": str(current_user.get("_id")),
+        "created_at": current_user.get("created_at"),
+        "name": current_user.get("name", ""),
+        "workplace": current_user.get("workplace", ""),
+        "address": current_user.get("address", ""),
+        "occupation": current_user.get("occupation", ""),
+        "phone": current_user.get("phone", "")
     }
 
+class UserUpdate(BaseModel):
+    name: str = ""
+    workplace: str = ""
+    address: str = ""
+    occupation: str = ""
+    phone: str = ""
+
+@app.put("/profile")
+async def update_profile(
+    update: UserUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    await users_collection.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": update.dict()}
+    )
+    return {"message": "Profile updated successfully."}
 
 
-# CORS setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Upload History
+@app.get("/history")
+async def get_upload_history(current_user: dict = Depends(get_current_user)):
+    uploads = scans_collection.find({"user_id": str(current_user["_id"])})
+    results = []
+    async for upload in uploads:
+        results.append({
+            "patient_name": upload["patient_name"],
+            "patient_id": upload["patient_id"],
+            "datetime": upload["datetime"],
+            "s3_url": upload["s3_url"],
+            "processed_s3_url": upload["processed_s3_url"],
+            "result": upload["result"],
+            "notes": upload["notes"]
+        })
+    return results
+
 
 @app.post("/upload")
 async def upload(
-    file: UploadFile,
+    files: List[UploadFile] = File(...),
     patient_name: str = Form(...),
     patient_id: str = Form(...),
     notes: str = Form(""),
     current_user: dict = Depends(get_current_user)
 ):
-    unique_filename = f"{uuid.uuid4()}_{file.filename}"
+    upload_results = []
 
-    # Read file bytes
-    image_bytes = await file.read()
+    for file in files:
+        unique_filename = f"{uuid.uuid4()}_{file.filename}"
 
-    # Upload original image
-    s3_url = s3.upload_to_s3(io.BytesIO(image_bytes), unique_filename)
+        # Read file bytes
+        image_bytes = await file.read()
 
-    # Open image
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        # Upload original image
+        s3_url = s3.upload_to_s3(io.BytesIO(image_bytes), unique_filename)
 
-    # Predict with YOLO
-    results = model.predict(image)
+        # Open image
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-    # Processed image (with annotations)
-    rendered = results[0].plot()
-    rendered_pil = Image.fromarray(rendered)
+        # Predict with YOLO
+        results = model.predict(image)
 
-    # Save rendered image to BytesIO
-    buffer = io.BytesIO()
-    rendered_pil.save(buffer, format="JPEG")
-    buffer.seek(0)
+        # Processed image (with annotations)
+        rendered = results[0].plot()
+        rendered_pil = Image.fromarray(rendered)
 
-    # Upload processed image
-    processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
+        # Save rendered image to BytesIO
+        buffer = io.BytesIO()
+        rendered_pil.save(buffer, format="JPEG")
+        buffer.seek(0)
 
-    # Prepare result labels
-    detected_classes = [model.names[int(cls)] for cls in results[0].boxes.cls]
-    confidences = [float(conf) for conf in results[0].boxes.conf]
+        # Upload processed image
+        processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
 
-    if detected_classes:
-        result_label = ", ".join(
-            [f"{cls} ({conf:.2f})" for cls, conf in zip(detected_classes, confidences)]
-        )
-    else:
-        result_label = "No objects detected"
+        # Prepare result labels
+        detected_classes = [model.names[int(cls)] for cls in results[0].boxes.cls]
+        confidences = [float(conf) for conf in results[0].boxes.conf]
 
-    # Store metadata in MongoDB
-    await scans_collection.insert_one({
-        "user_id": str(current_user["_id"]),
-        "user_email": current_user["email"],
-        "patient_name": patient_name,
-        "patient_id": patient_id,
-        "datetime": datetime.utcnow().isoformat(),
-        "filename": unique_filename,
-        "s3_url": s3_url,
-        "processed_s3_url": processed_s3_url,
-        "result": result_label,
-        "notes": notes,
-    })
+        if detected_classes:
+            result_label = ", ".join(
+                [f"{cls} ({conf:.2f})" for cls, conf in zip(detected_classes, confidences)]
+            )
+        else:
+            result_label = "No objects detected"
 
-    print("Processed URL:", processed_s3_url)
+        # Store metadata in MongoDB
+        await scans_collection.insert_one({
+            "user_id": str(current_user["_id"]),
+            "user_email": current_user["email"],
+            "patient_name": patient_name,
+            "patient_id": patient_id,
+            "datetime": datetime.utcnow().isoformat(),
+            "filename": unique_filename,
+            "s3_url": s3_url,
+            "processed_s3_url": processed_s3_url,
+            "result": result_label,
+            "notes": notes,
+        })
+
+        upload_results.append({
+            "s3_url": s3_url,
+            "processed_s3_url": processed_s3_url,
+            "result": result_label,
+        })
 
     return {
-        "s3_url": s3_url,
-        "processed_s3_url": processed_s3_url,
-        "result": result_label,
-        "message": "File uploaded and scan completed"
+        "message": f"{len(upload_results)} files uploaded and scanned successfully.",
+        "results": upload_results
     }

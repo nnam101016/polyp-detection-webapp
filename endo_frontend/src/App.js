@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
 import API from "./api";
+import UploadHistory from "./UploadHistory";
+
 
 function App() {
   // Upload state
-  const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [files, setFiles] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
   const [patientName, setPatientName] = useState("");
   const [patientId, setPatientId] = useState("");
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
-  const [s3Url, setS3Url] = useState("");
-  const [processedS3Url, setProcessedS3Url] = useState("");
-  const [result, setResult] = useState("");
+  const [uploadResults, setUploadResults] = useState([]);
 
   // Auth state
   const [email, setEmail] = useState("");
@@ -19,38 +19,33 @@ function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [profile, setProfile] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
+  const [isEditing, setIsEditing] = useState(false);
 
   // Tab state
   const [activeTab, setActiveTab] = useState(isLoggedIn ? "upload" : "login");
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    setFile(selectedFile);
-
-    if (selectedFile) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl("");
-    }
+    const selectedFiles = Array.from(e.target.files).slice(0, 10); // max 10
+    setFiles(selectedFiles);
+    const urls = selectedFiles.map(file => URL.createObjectURL(file));
+    setPreviewUrls(urls);
   };
 
+  // Handles
   const upload = async () => {
-    if (!file) {
-      setMessage("Please select a file.");
+    if (files.length === 0) {
+      setMessage("Please select at least one file.");
       return;
     }
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((file) => formData.append("files", file));
     formData.append("patient_name", patientName);
     formData.append("patient_id", patientId);
     formData.append("notes", notes);
 
     setMessage("Uploading...");
-    setResult("");
-    setS3Url("");
-    setProcessedS3Url("");
+    setUploadResults([]);
 
     try {
       const res = await API.post("/upload", formData, {
@@ -58,11 +53,8 @@ function App() {
           "Content-Type": "multipart/form-data",
         },
       });
-
-      setS3Url(res.data.s3_url);
-      setProcessedS3Url(res.data.processed_s3_url);
+      setUploadResults(res.data.results);
       setMessage(res.data.message);
-      setResult(res.data.result);
     } catch (error) {
       console.error(error);
       setMessage(error.response?.data?.detail || "Upload failed.");
@@ -112,6 +104,24 @@ function App() {
     }
   };
 
+  const handleSaveProfile = async () => {
+  try {
+    await API.put("/profile", {
+      name: profile.name,
+      workplace: profile.workplace,
+      address: profile.address,
+      occupation: profile.occupation,
+      phone: profile.phone,
+    });
+    setIsEditing(false);
+    fetchProfile(); // ✅ refresh with latest from backend
+  } catch (err) {
+    console.error("Failed to save profile:", err);
+    alert("Error saving profile.");
+  }
+};
+
+
   useEffect(() => {
     if (isLoggedIn) {
       fetchProfile();
@@ -143,6 +153,14 @@ function App() {
               }`}
             >
               Profile
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`px-4 py-2 rounded ${
+                activeTab === "history" ? "bg-blue-500 text-white" : "bg-white"
+              }`}
+            >
+              History
             </button>
             <button
               onClick={handleLogout}
@@ -182,7 +200,10 @@ function App() {
               type="file"
               onChange={handleFileChange}
               className="border p-2 w-full"
+              multiple
+              accept="image/*"
             />
+
           </div>
           <div className="mb-4">
             <label className="block mb-1 font-semibold">Patient Name</label>
@@ -220,39 +241,52 @@ function App() {
         </div>
       )}
 
-      {previewUrl && activeTab === "upload" && (
-        <div className="mt-6 text-center">
-          <p className="font-semibold mb-2">Uploaded Image Preview:</p>
-          <img src={previewUrl} alt="Preview" className="max-w-xs rounded border" />
+      {/* New: show selected image previews */}
+      {previewUrls.length > 0 && activeTab === "upload" && (
+        <div className="w-full flex flex-col items-center mt-10">
+          <h2 className="text-lg font-semibold mb-4">Selected Image(s):</h2>
+          <div className="flex flex-wrap justify-center gap-6">
+            {previewUrls.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt={`Selected ${i}`}
+                className="w-60 h-auto rounded border shadow-lg object-contain"
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      {processedS3Url && activeTab === "upload" && (
-        <div className="mt-6 text-center">
-          <p className="font-semibold mb-2">Processed Image with Detections:</p>
-          <img src={processedS3Url} alt="Detections" className="max-w-xs rounded border" />
-          <a
-            href={processedS3Url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 underline block mt-2"
-          >
-            View Processed Image
-          </a>
-        </div>
-      )}
-
-      {result && activeTab === "upload" && (
-        <div className="mt-4 text-center">
-          <p className="text-green-600 font-bold">Scan Result: {result}</p>
+      {uploadResults.length > 0 && activeTab === "upload" && (
+        <div className="w-full flex flex-col items-center mt-10">
+          <h2 className="text-lg font-semibold mb-4">Processed Results:</h2>
+          <div className="flex flex-wrap justify-center gap-6">
+            {uploadResults.map((res, i) => (
+              <div
+                key={i}
+                className="flex flex-col items-center w-60 min-h-[240px] p-2 border rounded shadow bg-white"
+              >
+                <img
+                  src={res.processed_s3_url}
+                  alt={`Processed ${i}`}
+                  className="w-full h-auto object-contain"
+                />
+                <p className="text-sm text-center mt-2">{res.result}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {message && activeTab === "upload" && (
-        <div className="mt-2 text-center">
-          <p className="text-gray-800">{message}</p>
+        <div className="w-full flex justify-center mt-6">
+          <div className="bg-white px-6 py-3 rounded shadow text-sm text-center text-gray-800 font-medium">
+            {message}
+          </div>
         </div>
       )}
+
 
       {activeTab === "login" && (
         <div className="bg-white p-6 rounded shadow w-full max-w-md">
@@ -315,16 +349,88 @@ function App() {
       {activeTab === "profile" && (
         <div className="bg-white p-6 rounded shadow w-full max-w-md text-center">
           <h2 className="text-xl font-semibold mb-4">Your Profile</h2>
-          {profile ? (
-            <>
-              <p><strong>Email:</strong> {profile.email}</p>
-              <p><strong>User ID:</strong> {profile.user_id}</p>
-              <p><strong>Created At:</strong> {profile.created_at}</p>
-            </>
+
+          <p className="mb-2"><strong>Email:</strong> {profile?.email}</p>
+          <p className="mb-2"><strong>User ID:</strong> {profile?.user_id}</p>
+          <p className="mb-4"><strong>Created At:</strong> {new Date(profile?.created_at).toLocaleString()}</p>
+
+          <div className="text-left">
+            <label className="block font-semibold mb-1">Name</label>
+            <input
+              type="text"
+              value={profile?.name || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Workplace</label>
+            <input
+              type="text"
+              value={profile?.workplace || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, workplace: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Address</label>
+            <input
+              type="text"
+              value={profile?.address || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Occupation</label>
+            <input
+              type="text"
+              value={profile?.occupation || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, occupation: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Phone</label>
+            <input
+              type="text"
+              value={profile?.phone || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+          </div>
+
+          {isEditing ? (
+            <button
+              onClick={handleSaveProfile}
+              className="bg-blue-500 text-white px-4 py-2 rounded w-full mt-2 hover:bg-blue-600"
+            >
+              Save Changes
+            </button>
           ) : (
-            <p>Loading your profile...</p>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="bg-blue-500 text-white px-4 py-2 rounded w-full mt-2 hover:bg-blue-600"
+            >
+              Edit Profile
+            </button>
           )}
         </div>
+      )}
+
+      {activeTab === "history" && (
+        <UploadHistory />
       )}
     </div>
   );
