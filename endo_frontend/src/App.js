@@ -1,148 +1,436 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import API from "./api";
+import UploadHistory from "./UploadHistory";
+
 
 function App() {
-  const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  // Upload state
+  const [files, setFiles] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
   const [patientName, setPatientName] = useState("");
   const [patientId, setPatientId] = useState("");
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
-  const [s3Url, setS3Url] = useState("");
-  const [processedS3Url, setProcessedS3Url] = useState(""); // ✅ NEW
-  const [result, setResult] = useState("");
+  const [uploadResults, setUploadResults] = useState([]);
 
-  const backendUrl = "http://127.0.0.1:8000";
+  // Auth state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState(isLoggedIn ? "upload" : "login");
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    setFile(selectedFile);
-
-    if (selectedFile) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl("");
-    }
+    const selectedFiles = Array.from(e.target.files).slice(0, 10); // max 10
+    setFiles(selectedFiles);
+    const urls = selectedFiles.map(file => URL.createObjectURL(file));
+    setPreviewUrls(urls);
   };
 
+  // Handles
   const upload = async () => {
-    if (!file) {
-      setMessage("Please select a file.");
+    if (files.length === 0) {
+      setMessage("Please select at least one file.");
       return;
     }
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((file) => formData.append("files", file));
     formData.append("patient_name", patientName);
     formData.append("patient_id", patientId);
     formData.append("notes", notes);
 
     setMessage("Uploading...");
-    setResult("");
-    setS3Url("");
-    setProcessedS3Url(""); // ✅ clear previous
+    setUploadResults([]);
 
     try {
-      const res = await fetch(`${backendUrl}/upload`, {
-        method: "POST",
-        body: formData,
+      const res = await API.post("/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setS3Url(data.s3_url);
-        setProcessedS3Url(data.processed_s3_url); // ✅ set processed image
-        setMessage(data.message);
-        setResult(data.result);
-      } else {
-        setMessage(data.detail || "Upload failed.");
-      }
+      setUploadResults(res.data.results);
+      setMessage(res.data.message);
     } catch (error) {
       console.error(error);
-      setMessage("Network error.");
+      setMessage(error.response?.data?.detail || "Upload failed.");
     }
   };
 
+  const handleRegister = async () => {
+    try {
+      await API.post("/register", { email, password });
+      setAuthMessage("Registration successful! You can now log in.");
+    } catch (err) {
+      setAuthMessage(err.response?.data?.detail || "Error registering.");
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const res = await API.post("/login", { email, password });
+      localStorage.setItem("token", res.data.access_token);
+      localStorage.setItem("user_id", res.data.user_id); // ✅ Store user_id
+      localStorage.setItem("email", res.data.email);     // ✅ Store email
+      setIsLoggedIn(true);
+      setActiveTab("upload");
+      setAuthMessage("Login successful!");
+      fetchProfile();
+    } catch (err) {
+      setAuthMessage(err.response?.data?.detail || "Error logging in.");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user_id");
+    localStorage.removeItem("email");
+    setIsLoggedIn(false);
+    setProfile(null);
+    setActiveTab("login");
+    setAuthMessage("Logged out.");
+  };
+
+  const fetchProfile = async () => {
+    try {
+      const res = await API.get("/profile");
+      setProfile(res.data);
+    } catch (err) {
+      setProfile(null);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+  try {
+    await API.put("/profile", {
+      name: profile.name,
+      workplace: profile.workplace,
+      address: profile.address,
+      occupation: profile.occupation,
+      phone: profile.phone,
+    });
+    setIsEditing(false);
+    fetchProfile(); // ✅ refresh with latest from backend
+  } catch (err) {
+    console.error("Failed to save profile:", err);
+    alert("Error saving profile.");
+  }
+};
+
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchProfile();
+    }
+  }, [isLoggedIn]);
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
-      <h1 className="text-3xl font-bold mb-4 text-blue-600">Polyp Detection Upload</h1>
-      <div className="bg-white p-6 rounded shadow w-full max-w-lg">
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">Select Image</label>
-          <input
-            type="file"
-            onChange={handleFileChange}
-            className="border p-2 w-full"
-          />
-        </div>
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">Patient Name</label>
-          <input
-            type="text"
-            value={patientName}
-            onChange={(e) => setPatientName(e.target.value)}
-            className="border p-2 w-full"
-          />
-        </div>
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">Patient ID</label>
-          <input
-            type="text"
-            value={patientId}
-            onChange={(e) => setPatientId(e.target.value)}
-            className="border p-2 w-full"
-          />
-        </div>
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">Notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="border p-2 w-full"
-            rows={3}
-          ></textarea>
-        </div>
-        <button
-          onClick={upload}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Scan
-        </button>
+      <h1 className="text-3xl font-bold mb-6 text-blue-600">
+        Polyp Detection Webapp
+      </h1>
+
+      {/* Tabs */}
+      <div className="flex space-x-4 mb-6">
+        {isLoggedIn ? (
+          <>
+            <button
+              onClick={() => setActiveTab("upload")}
+              className={`px-4 py-2 rounded ${
+                activeTab === "upload" ? "bg-blue-500 text-white" : "bg-white"
+              }`}
+            >
+              Upload
+            </button>
+            <button
+              onClick={() => setActiveTab("profile")}
+              className={`px-4 py-2 rounded ${
+                activeTab === "profile" ? "bg-blue-500 text-white" : "bg-white"
+              }`}
+            >
+              Profile
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`px-4 py-2 rounded ${
+                activeTab === "history" ? "bg-blue-500 text-white" : "bg-white"
+              }`}
+            >
+              History
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded bg-red-500 text-white"
+            >
+              Logout
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setActiveTab("login")}
+              className={`px-4 py-2 rounded ${
+                activeTab === "login" ? "bg-blue-500 text-white" : "bg-white"
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => setActiveTab("register")}
+              className={`px-4 py-2 rounded ${
+                activeTab === "register" ? "bg-blue-500 text-white" : "bg-white"
+              }`}
+            >
+              Register
+            </button>
+          </>
+        )}
       </div>
 
-      {previewUrl && (
-        <div className="mt-6 text-center">
-          <p className="font-semibold mb-2">Uploaded Image Preview:</p>
-          <img src={previewUrl} alt="Preview" className="max-w-xs rounded border" />
-        </div>
-      )}
+      {/* Tabs content */}
+      {activeTab === "upload" && isLoggedIn && (
+        <div className="bg-white p-6 rounded shadow w-full max-w-lg">
+          <div className="mb-4">
+            <label className="block mb-1 font-semibold">Select Image</label>
+            <input
+              type="file"
+              onChange={handleFileChange}
+              className="border p-2 w-full"
+              multiple
+              accept="image/*"
+            />
 
-      {processedS3Url && (
-        <div className="mt-6 text-center">
-          <p className="font-semibold mb-2">Processed Image with Detections:</p>
-          <img src={processedS3Url} alt="Detections" className="max-w-xs rounded border" />
-          <a
-            href={processedS3Url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 underline block mt-2"
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 font-semibold">Patient Name</label>
+            <input
+              type="text"
+              value={patientName}
+              onChange={(e) => setPatientName(e.target.value)}
+              className="border p-2 w-full"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 font-semibold">Patient ID</label>
+            <input
+              type="text"
+              value={patientId}
+              onChange={(e) => setPatientId(e.target.value)}
+              className="border p-2 w-full"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 font-semibold">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="border p-2 w-full"
+              rows={3}
+            ></textarea>
+          </div>
+          <button
+            onClick={upload}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
-            View Processed Image
-          </a>
+            Scan
+          </button>
         </div>
       )}
 
-      {result && (
-        <div className="mt-4 text-center">
-          <p className="text-green-600 font-bold">Scan Result: {result}</p>
+      {/* New: show selected image previews */}
+      {previewUrls.length > 0 && activeTab === "upload" && (
+        <div className="w-full flex flex-col items-center mt-10">
+          <h2 className="text-lg font-semibold mb-4">Selected Image(s):</h2>
+          <div className="flex flex-wrap justify-center gap-6">
+            {previewUrls.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt={`Selected ${i}`}
+                className="w-60 h-auto rounded border shadow-lg object-contain"
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      {message && (
-        <div className="mt-2 text-center">
-          <p className="text-gray-800">{message}</p>
+      {uploadResults.length > 0 && activeTab === "upload" && (
+        <div className="w-full flex flex-col items-center mt-10">
+          <h2 className="text-lg font-semibold mb-4">Processed Results:</h2>
+          <div className="flex flex-wrap justify-center gap-6">
+            {uploadResults.map((res, i) => (
+              <div
+                key={i}
+                className="flex flex-col items-center w-60 min-h-[240px] p-2 border rounded shadow bg-white"
+              >
+                <img
+                  src={res.processed_s3_url}
+                  alt={`Processed ${i}`}
+                  className="w-full h-auto object-contain"
+                />
+                <p className="text-sm text-center mt-2">{res.result}</p>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {message && activeTab === "upload" && (
+        <div className="w-full flex justify-center mt-6">
+          <div className="bg-white px-6 py-3 rounded shadow text-sm text-center text-gray-800 font-medium">
+            {message}
+          </div>
+        </div>
+      )}
+
+
+      {activeTab === "login" && (
+        <div className="bg-white p-6 rounded shadow w-full max-w-md">
+          <h2 className="text-xl font-semibold mb-4">Login</h2>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="border p-2 w-full mb-2"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="border p-2 w-full mb-2"
+          />
+          <button
+            onClick={handleLogin}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full"
+          >
+            Login
+          </button>
+          {authMessage && (
+            <p className="mt-2 text-center text-gray-700">{authMessage}</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === "register" && (
+        <div className="bg-white p-6 rounded shadow w-full max-w-md">
+          <h2 className="text-xl font-semibold mb-4">Register</h2>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="border p-2 w-full mb-2"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="border p-2 w-full mb-2"
+          />
+          <button
+            onClick={handleRegister}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full"
+          >
+            Register
+          </button>
+          {authMessage && (
+            <p className="mt-2 text-center text-gray-700">{authMessage}</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === "profile" && (
+        <div className="bg-white p-6 rounded shadow w-full max-w-md text-center">
+          <h2 className="text-xl font-semibold mb-4">Your Profile</h2>
+
+          <p className="mb-2"><strong>Email:</strong> {profile?.email}</p>
+          <p className="mb-2"><strong>User ID:</strong> {profile?.user_id}</p>
+          <p className="mb-4"><strong>Created At:</strong> {new Date(profile?.created_at).toLocaleString()}</p>
+
+          <div className="text-left">
+            <label className="block font-semibold mb-1">Name</label>
+            <input
+              type="text"
+              value={profile?.name || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Workplace</label>
+            <input
+              type="text"
+              value={profile?.workplace || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, workplace: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Address</label>
+            <input
+              type="text"
+              value={profile?.address || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Occupation</label>
+            <input
+              type="text"
+              value={profile?.occupation || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, occupation: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+
+            <label className="block font-semibold mb-1">Phone</label>
+            <input
+              type="text"
+              value={profile?.phone || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
+              className={`border p-2 w-full mb-4 ${
+                isEditing ? "" : "bg-gray-100 text-gray-600 cursor-not-allowed"
+              }`}
+              readOnly={!isEditing}
+            />
+          </div>
+
+          {isEditing ? (
+            <button
+              onClick={handleSaveProfile}
+              className="bg-blue-500 text-white px-4 py-2 rounded w-full mt-2 hover:bg-blue-600"
+            >
+              Save Changes
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="bg-blue-500 text-white px-4 py-2 rounded w-full mt-2 hover:bg-blue-600"
+            >
+              Edit Profile
+            </button>
+          )}
+        </div>
+      )}
+
+      {activeTab === "history" && (
+        <UploadHistory />
       )}
     </div>
   );
