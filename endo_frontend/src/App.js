@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import API from "./api";
 import UploadHistory from "./UploadHistory";
+import ImageCompare from "./components/ImageCompare";
 
 
 function App() {
@@ -241,38 +242,17 @@ function App() {
         </div>
       )}
 
-      {/* New: show selected image previews */}
-      {previewUrls.length > 0 && activeTab === "upload" && (
-        <div className="w-full flex flex-col items-center mt-10">
-          <h2 className="text-lg font-semibold mb-4">Selected Image(s):</h2>
-          <div className="flex flex-wrap justify-center gap-6">
-            {previewUrls.map((url, i) => (
-              <img
-                key={i}
-                src={url}
-                alt={`Selected ${i}`}
-                className="w-60 h-auto rounded border shadow-lg object-contain"
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       {uploadResults.length > 0 && activeTab === "upload" && (
         <div className="w-full flex flex-col items-center mt-10">
           <h2 className="text-lg font-semibold mb-4">Processed Results:</h2>
           <div className="flex flex-wrap justify-center gap-6">
             {uploadResults.map((res, i) => (
-              <div
-                key={i}
-                className="flex flex-col items-center w-60 min-h-[240px] p-2 border rounded shadow bg-white"
-              >
-                <img
-                  src={res.processed_s3_url}
-                  alt={`Processed ${i}`}
-                  className="w-full h-auto object-contain"
+              <div key={i} className="flex flex-col items-center gap-2">
+                <ImageCompare
+                  originalUrl={previewUrls[i]} // ⬅ original image from preview
+                  processedUrl={res.processed_s3_url} // ⬅ processed image from backend
                 />
-                <p className="text-sm text-center mt-2">{res.result}</p>
+                <p className="text-sm text-center">{res.result}</p>
               </div>
             ))}
           </div>
