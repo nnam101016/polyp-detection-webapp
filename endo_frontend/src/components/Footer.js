@@ -1,31 +1,12 @@
 function Footer (){
     return (
-        <footer className="flex mx-auto font-bold text-xl content-center justify-center flex-wrap">
-            
-                <button className="hover:bg-gray-200 text-sky-800 py-4 px-10 rounded-full">
-                    About Us
-                </button>
-
-                <button className="hover:bg-gray-200 text-sky-800 py-4 px-10 rounded-full">
-                    User Feedbacks
-                </button>
-
-                <button className="hover:bg-gray-200 text-sky-800 py-4 px-10 rounded-full">
-                    Copyright claims
-                </button>
-
-                <button className="hover:bg-gray-200 text-sky-800 py-4 px-10 rounded-full">
-                    Private Policy
-                </button>
-
-                <button className="hover:bg-gray-200 text-sky-800 py-4 px-10 rounded-full">
-                    Term of Service
-                </button>
-            
+        <footer className="flex gap-10 py-1 mx-auto text-md content-center justify-center flex-wrap text-gray-600">
+            <a href="/diagnostic" className="">About Us</a>
+            <a href="/analytic" className="hover:text-gray-400">User Feedbacks</a>
+            <a href="/showcase" className="hover:text-gray-400">Copyright claims</a>
+            <a href="/showcase" className="hover:text-gray-400">Private Policy</a>
+            <a href="/showcase" className="hover:text-gray-400">Term of Service</a>
         </footer>
     );
 }
-
-// each button lead to misc pages and the header have navbar to Home, FAQ, Analytics and Login
-
 export default Footer;
