@@ -1,6 +1,7 @@
 import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
 import EndoSample from "../image/bg2.avif";
+import CarouselWithText from "../components/CarouselWithText";
 
 function HomePage(){
     return (
@@ -33,10 +34,10 @@ function HomePage(){
                         <br/>
                         Compatible with various image formats and work with multiple images at once along with video files,
                         make it a versatile tool for healthcare professionals.
-                        
                     </p>
                 </div>
             </div>
+            <CarouselWithText/>
             <Footer/>
         </div>
     );
