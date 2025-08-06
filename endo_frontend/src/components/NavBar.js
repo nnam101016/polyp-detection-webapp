@@ -1,20 +1,25 @@
 //Navigation Bar to move between pages
 import logo from '../image/logo.svg';
+import {Link} from "react-router-dom"
 
 function NavBar(){
     return (
-        <nav className="bg-sky-800">
-            <div className="container flex justify-between items-center">
-               <img src= {logo} alt="Logo" className="w-16 h-16"></img>
-                <div className="space-x-12 text-xl ml-auto">
-                    <a href="/diagnostic" className="text-sky-300 hover:text-white">Diagnostic</a>
-                    <a href="/analytic" className="text-sky-300 hover:text-white">Analytic</a>
-                    <button className="bg-white text-sky-800 px-4 py-1 rounded hover:bg-sky-100 hover:text-sky-900">
-                        Login
-                    </button>
-                </div>
+        <div className= " w-screen h-[12vh] container mx-auto flex flex-wrap justify-between items-center shadow-md bg-white">
+            <img src= {logo} alt="Logo" className="h-2/3"/>
+            <div className="text-3xl font-bold text-egypt-blue">
+                    EndoDetect
             </div>
-        </nav>
+            <div className="">
+
+            </div>
+            <Link to="/diagnosis" className="text-egypt-blue hover:text-clear-sky"> Diagnostic </Link>
+            <Link to="/analytic" className="text-egypt-blue hover:text-clear-sky p-x-3">Analytic</Link>
+            <Link to="/login">
+                <button className="bg-egypt-blue text-white items-center px-6 py-2 font-bold rounded-full hover:opacity-75 transition duration-200">
+                    Login
+                </button>
+            </Link>
+        </div>
     );
 }
 

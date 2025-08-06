@@ -1,7 +1,6 @@
 function TOSandFAQPage() {
     return (
         <div className="flex flex-col min-h-screen">
-            <NavBar />
             <div className="flex-grow flex items-center justify-center bg-gray-100">
                 <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-md">
                     <h1 className="text-2xl font-bold mb-4">Terms of Service</h1>
@@ -11,7 +10,6 @@ function TOSandFAQPage() {
                     {/* Add more content as needed */}
                 </div>
             </div>
-            <Footer />
         </div>
     );
 }
