@@ -1,31 +1,24 @@
 import React, { useEffect, useState } from "react";
 import API from "../api";
 
-function AdminDashboard({ user }) {
+const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [uploads, setUploads] = useState([]);
   const [stats, setStats] = useState({ total_users: 0, total_uploads: 0 });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [message, setMessage] = useState("");
-  const [models, setModels] = useState([]);
-  const [selectedModel, setSelectedModel] = useState("default");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    if (user?.is_admin) {
-      fetchUsers();
-      fetchUploads();
-      fetchStats();
-      fetchModels();
-    }
-  }, [user]);
+    fetchUsers();
+    fetchUploads();
+    fetchStats();
+  }, []);
 
   const fetchUsers = async () => {
     try {
       const res = await API.get("/admin/users");
       setUsers(res.data);
     } catch (err) {
-      console.error(err);
-      setMessage("Failed to load users.");
+      console.error("Failed to fetch users", err);
     }
   };
 
@@ -34,8 +27,7 @@ function AdminDashboard({ user }) {
       const res = await API.get("/admin/uploads");
       setUploads(res.data);
     } catch (err) {
-      console.error(err);
-      setMessage("Failed to load uploads.");
+      console.error("Failed to fetch uploads", err);
     }
   };
 
@@ -44,159 +36,86 @@ function AdminDashboard({ user }) {
       const res = await API.get("/admin/stats");
       setStats(res.data);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch stats", err);
     }
   };
 
-  const fetchModels = async () => {
+  const deleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
     try {
-      const res = await API.get("/models");
-      setModels(res.data.models);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleDeleteUser = async (id) => {
-    if (!window.confirm("Delete this user?")) return;
-    try {
-      await API.delete(`/admin/users/${id}`);
-      fetchUsers();
-      fetchStats();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete user.");
-    }
-  };
-
-  const handlePromoteUser = async (id) => {
-    if (!window.confirm("Promote this user to admin?")) return;
-    try {
-      await API.put(`/admin/users/${id}/promote`);
+      await API.delete(`/admin/users/${userId}`);
       fetchUsers();
     } catch (err) {
-      console.error(err);
-      alert("Failed to promote user.");
+      console.error("Failed to delete user", err);
     }
   };
 
-  const handleDeleteUpload = async (id) => {
-    if (!window.confirm("Delete this upload?")) return;
+  const promoteUser = async (userId) => {
+    try {
+      await API.put(`/admin/users/${userId}/promote`);
+      fetchUsers();
+    } catch (err) {
+      console.error("Failed to promote user", err);
+    }
+  };
+
+  const deleteUpload = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this upload?")) return;
     try {
       await API.delete(`/admin/uploads/${id}`);
       fetchUploads();
-      fetchStats();
     } catch (err) {
-      console.error(err);
-      alert("Failed to delete upload.");
+      console.error("Failed to delete upload", err);
     }
   };
 
-  const filteredUploads = uploads.filter((u) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      u.patient_name.toLowerCase().includes(q) ||
-      u.user_email.toLowerCase().includes(q) ||
-      u.patient_id?.toLowerCase().includes(q)
-    );
-  });
-
-  if (!user?.is_admin) {
-    return <p className="text-center mt-10 text-red-500">Access denied. Admins only.</p>;
-  }
+  const filteredUploads = uploads.filter((u) =>
+    u.patient_name.toLowerCase().includes(search.toLowerCase()) ||
+    u.user_email?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="p-6 w-full max-w-6xl">
-      <h2 className="text-2xl font-bold mb-6 text-center">Admin Dashboard</h2>
+    <div className="p-6 w-full max-w-6xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-4 text-blue-600">Admin Dashboard</h2>
 
-      <div className="flex justify-center gap-6 mb-8 text-center">
-        <div className="bg-white rounded shadow p-4 w-40">
-          <p className="text-sm text-gray-600">Total Users</p>
-          <p className="text-xl font-bold text-blue-600">{stats.total_users}</p>
+      {/* Stats */}
+      <div className="flex space-x-4 mb-6">
+        <div className="bg-white shadow rounded px-4 py-3">
+          <p className="font-semibold">Total Users</p>
+          <p>{stats.total_users}</p>
         </div>
-        <div className="bg-white rounded shadow p-4 w-40">
-          <p className="text-sm text-gray-600">Total Uploads</p>
-          <p className="text-xl font-bold text-green-600">{stats.total_uploads}</p>
+        <div className="bg-white shadow rounded px-4 py-3">
+          <p className="font-semibold">Total Uploads</p>
+          <p>{stats.total_uploads}</p>
         </div>
       </div>
 
-      {/* User list */}
-      <section className="mb-10">
-        <h3 className="text-xl font-semibold mb-2">Registered Users</h3>
-        <div className="overflow-x-auto border rounded">
-          <table className="w-full text-left table-auto">
-            <thead className="bg-gray-100">
+      {/* Users Table */}
+      <div className="mb-10">
+        <h3 className="text-xl font-semibold mb-2">All Users</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white shadow rounded">
+            <thead>
               <tr>
-                <th className="p-2 border">Email</th>
-                <th className="p-2 border">Name</th>
-                <th className="p-2 border">Admin</th>
-                <th className="p-2 border">Actions</th>
+                <th className="p-2 text-left border">Email</th>
+                <th className="p-2 text-left border">Is Admin</th>
+                <th className="p-2 text-left border">Created</th>
+                <th className="p-2 text-left border">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u._id}>
                   <td className="p-2 border">{u.email}</td>
-                  <td className="p-2 border">{u.name || "-"}</td>
                   <td className="p-2 border">{u.is_admin ? "Yes" : "No"}</td>
+                  <td className="p-2 border">{new Date(u.created_at).toLocaleString()}</td>
                   <td className="p-2 border space-x-2">
                     {!u.is_admin && (
-                      <>
-                        <button
-                          onClick={() => handlePromoteUser(u._id)}
-                          className="text-blue-600 hover:underline"
-                        >
-                          Promote
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(u._id)}
-                          className="text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </>
+                      <button onClick={() => promoteUser(u._id)} className="text-blue-600 hover:underline">
+                        Promote
+                      </button>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Upload list */}
-      <section>
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-xl font-semibold">All Uploads</h3>
-          <input
-            type="text"
-            placeholder="Search by name/email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="border p-2 rounded"
-          />
-        </div>
-        <div className="overflow-x-auto border rounded">
-          <table className="w-full text-left table-auto">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 border">Patient Name</th>
-                <th className="p-2 border">Uploader</th>
-                <th className="p-2 border">Datetime</th>
-                <th className="p-2 border">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUploads.map((u) => (
-                <tr key={u._id}>
-                  <td className="p-2 border">{u.patient_name}</td>
-                  <td className="p-2 border">{u.user_email}</td>
-                  <td className="p-2 border">{new Date(u.datetime).toLocaleString()}</td>
-                  <td className="p-2 border">
-                    <button
-                      onClick={() => handleDeleteUpload(u._id)}
-                      className="text-red-600 hover:underline"
-                    >
+                    <button onClick={() => deleteUser(u._id)} className="text-red-600 hover:underline">
                       Delete
                     </button>
                   </td>
@@ -205,9 +124,62 @@ function AdminDashboard({ user }) {
             </tbody>
           </table>
         </div>
-      </section>
+      </div>
+
+      {/* Uploads Table */}
+      <div>
+        <h3 className="text-xl font-semibold mb-2">All Uploads</h3>
+        <input
+          type="text"
+          placeholder="Search by name/email..."
+          className="mb-4 p-2 border w-64"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white shadow rounded">
+            <thead>
+              <tr>
+                <th className="p-2 text-left border">Patient Name</th>
+                <th className="p-2 text-left border">Uploader</th>
+                <th className="p-2 text-left border">Datetime</th>
+                <th className="p-2 text-left border">URL</th>
+                <th className="p-2 text-left border">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUploads.map((u) => (
+                <tr key={u._id}>
+                  <td className="p-2 border">{u.patient_name}</td>
+                  <td className="p-2 border">{u.user_email || ""}</td>
+                  <td className="p-2 border">{new Date(u.datetime).toLocaleString()}</td>
+                  <td className="p-2 border">
+                    {u.processed_s3_url ? (
+                      <a
+                        href={u.processed_s3_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        Open
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="p-2 border">
+                    <button onClick={() => deleteUpload(u._id)} className="text-red-600 hover:underline">
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
-}
+};
 
 export default AdminDashboard;
