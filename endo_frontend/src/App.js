@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import API from "./api";
 import UploadHistory from "./UploadHistory";
 import ImageCompare from "./components/ImageCompare";
+import AdminDashboard from "./components/AdminDashboard";
 
 
 function App() {
@@ -165,6 +166,19 @@ function App() {
             >
               History
             </button>
+            
+            {profile?.is_admin && (
+              <button
+                onClick={() => setActiveTab("admin")}
+                className={`px-4 py-2 rounded ${
+                  activeTab === "admin" ? "bg-blue-500 text-white" : "bg-white"
+                }`}
+              >
+                Admin
+              </button>
+            )}
+
+
             <button
               onClick={handleLogout}
               className="px-4 py-2 rounded bg-red-500 text-white"
@@ -408,6 +422,11 @@ function App() {
       {activeTab === "history" && (
         <UploadHistory />
       )}
+
+      {activeTab === "admin" && profile?.is_admin && (
+        <AdminDashboard user={profile} />
+      )}
+
     </div>
   );
 }
