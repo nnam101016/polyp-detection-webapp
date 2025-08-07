@@ -18,9 +18,17 @@ import s3
 import uuid
 import io
 
-# Load model
-model = YOLO("./model/best.pt")
-model.eval()
+# --- Load multiple models ---
+AVAILABLE_MODELS = {
+    "default": YOLO("./model/best.pt"),
+    "fast": YOLO("./model/best.pt"),       # e.g., smaller model
+    "accurate": YOLO("./model/best.pt"), # e.g., larger model
+    "experimental": YOLO("./model/best.pt")
+}
+
+for m in AVAILABLE_MODELS.values():
+    m.eval()
+
 
 # MongoDB connection
 load_dotenv()
@@ -174,14 +182,20 @@ async def get_upload_history(current_user: dict = Depends(get_current_user)):
     return results
 
 
+# --- Upload with model selection ---
 @app.post("/upload")
 async def upload(
     files: List[UploadFile] = File(...),
     patient_name: str = Form(...),
     patient_id: str = Form(...),
     notes: str = Form(""),
+    model_name: str = Form("default"),   # 👈 NEW
     current_user: dict = Depends(get_current_user)
 ):
+    if model_name not in AVAILABLE_MODELS:
+        raise HTTPException(status_code=400, detail="Unknown model selected")
+
+    model = AVAILABLE_MODELS[model_name]
     upload_results = []
 
     for file in files:
@@ -196,19 +210,17 @@ async def upload(
         # Open image
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        # Predict with YOLO
+        # Predict with selected YOLO model
         results = model.predict(image)
 
         # Processed image (with annotations)
         rendered = results[0].plot()
         rendered_pil = Image.fromarray(rendered)
 
-        # Save rendered image to BytesIO
         buffer = io.BytesIO()
         rendered_pil.save(buffer, format="JPEG")
         buffer.seek(0)
 
-        # Upload processed image
         processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
 
         # Prepare result labels
@@ -234,15 +246,22 @@ async def upload(
             "processed_s3_url": processed_s3_url,
             "result": result_label,
             "notes": notes,
+            "model_used": model_name  # 👈 store chosen model
         })
 
         upload_results.append({
             "s3_url": s3_url,
             "processed_s3_url": processed_s3_url,
             "result": result_label,
+            "model": model_name
         })
 
     return {
-        "message": f"{len(upload_results)} files uploaded and scanned successfully.",
+        "message": f"{len(upload_results)} files uploaded and scanned successfully with {model_name} model.",
         "results": upload_results
     }
+
+# --- Models Endpoint ---
+@app.get("/models")
+async def get_models():
+    return {"models": list(AVAILABLE_MODELS.keys())}
