@@ -3,106 +3,83 @@ import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
 import EndoSample from "../image/bg2.avif";
 
-function HomePage(){
-    const [steps, setSteps] = useState([
-    "Step 1: Upload endoscopy image",
-    "Step 2: Click Detect",
-    "Step 3: View result and compare with model",
-  ]);
+import bgSample from "../image/bg2.avif";
+import model1 from "../images/model1.png";
+import model2 from "../images/model2.png";
+import model3 from "../images/model3.png";
 
-  const [hoveredStep, setHoveredStep] = useState(null);
+function HomePage() {
+  return (
+    <div className="w-screen">
 
-  const [carouselIndex, setCarouselIndex] = useState(0);
+      {/* Hero Section */}
+      <div className="bg-clear-sky min-h-screen flex flex-col md:flex-row justify-center items-center px-4 py-12">
+        <div className="flex-1 text-center md:text-left space-y-6">
+          <h1 className="text-3xl sm:text-4xl font-bold">EndoDetect: Lesion Detection in Endoscopic Images using Deep Learning</h1>
+          <p className="text-lg sm:text-xl">
+            Upload your images and let our advanced AI help you detect potential polyps with high accuracy.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 sm:justify-start justify-center">
+            <Link to="/diagnosis" className="btn-primary text-center">Start Diagnosis</Link>
+            <Link to="#why" className="btn-primary text-center">Learn More</Link>
+          </div>
+        </div>
+        <div className="flex-1 mt-8 md:mt-0 md:ml-8">
+          <img src={EndoSample} alt="Endoscopic Sample" className="rounded-lg shadow-lg w-full object-cover" />
+        </div>
+      </div>
 
-  const [modelImages, setModelImages] = useState([
-    "/images/model1.png",
-    "/images/model2.png",
-    "/images/model3.png",
-  ]);
-    return (
-        <><><><div>
-            <NavBar />
-            <div className="bg-[url(image/bg1.avif)] bg-cover w-screen h-96 flex justify-center items-center flex-col">
-                <div className="font-bold text-sky-800 text-8xl p-4">
-                    ENDODETECT
-                </div>
+      {/* Why EndoDetect */}
+      <section id="why" className="bg-clear-sky py-12 px-4 flex flex-col md:flex-row items-center gap-8">
+        <img
+          src={EndoSample}
+          alt="Why EndoDetect"
+          className="flex-1 rounded-lg shadow-lg object-cover w-full sm:w-4/5 md:w-1/2"
+        />
+        <div className="flex-1 text-center md:text-left">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4">Why EndoDetect</h2>
+          <p className="text-base sm:text-lg">
+            Fast, accurate, and easy-to-use AI tool designed to help healthcare professionals detect potential polyps in endoscopic images with confidence.
+          </p>
+        </div>
+      </section>
 
-                <p className="text-sky-600 w-2/3 text-2xl p-4">
-                    Welcome to EndoDetect, your AI-powered tool for polyp detection in endoscopic images.
-                    <br />
-                    Upload your images and let our advanced algorithms assist you in identifying potential polyps.
-                </p>
+      {/* Carousel */}
+      <section className="py-12 px-4">
+        <CarouselWithText />
+      </section>
 
-                <button className="text-white rounded-full my-6 bg-sky-800 px-8 py-4 text-xl font-semibold hover:bg-sky-600 transition duration-100">
-                    Learn More
-                </button>
-            </div>
-            <hr className="border-white border-4"></hr>
-            <div className="bg-sky-800 flex p-8 h-96 justify-center items-center">
-                <img src={EndoSample} alt="Endoscopic Sample" className="w-1/3 h-3/4 object-cover m-8" />
-                <div className="text-center w-1/3 m-8">
-                    <h2 className="text-white text-4xl font-bold mb-4">How It Works</h2>
-                    <p className="text-white text-lg mb-6 text-left">
-                        Upload your endoscopic images and our Machine Learning model will analyze them to detect potential polyps with great accuracy
-                        <br />
-                        Get instant results and insights to assist in your medical evaluations.
-                        <br />
-                        Compatible with various image formats and work with multiple images at once along with video files,
-                        make it a versatile tool for healthcare professionals.
+      {/* Left Panel Instructions */}
+      <section className="bg-clear-sky py-12 px-4 flex flex-col md:flex-row gap-8">
+        {/* Left Side Panel */}
+        <div className="relative flex-1">
+          <div className="absolute -top-4 -left-4 w-full h-full bg-egypt-blue rounded-xl"></div>
+          <div className="relative bg-clear-sky rounded-xl p-6 shadow-lg z-10">
+            <img src={EndoSample} alt="Instruction" className="rounded-md mb-4" />
+            <p className="text-left text-base sm:text-lg">
+              Step-by-step guide to using EndoDetect effectively for your diagnosis workflow.
+            </p>
+          </div>
+        </div>
+        {/* Right Content */}
+        <div className="flex-1 text-left flex flex-col justify-center">
+          <h3 className="text-xl sm:text-2xl font-bold mb-4">How to Use</h3>
+          <p className="text-base sm:text-lg">
+            Upload your endoscopic images, select the analysis mode, and receive AI-driven insights in seconds.
+          </p>
+        </div>
+      </section>
 
-                    </p>
-                </div>
-            </div>
-            <Footer />
-        </div><div className="flex flex-row bg-white h-[600px] p-12 items-center justify-between">
-                <div className="w-1/2 pr-8">
-                    <h2 className="text-3xl font-bold text-sky-800 mb-6">Usage Instructions</h2>
-                    <ul className="space-y-4 text-xl text-sky-700">
-                        {steps.map(step => (
-                            <li
-                                key={step.id}
-                                className={`cursor-pointer p-3 rounded-lg transition duration-200 ${hoveredStep === step.id ? "bg-sky-100 font-semibold" : "hover:bg-sky-50"}`}
-                                onMouseEnter={() => setHoveredStep(step.id)}
-                            >
-                                {step.text}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-
-                <div className="w-1/2 pl-8">
-                    <img
-                        src={steps.find(s => s.id === hoveredStep)?.image}
-                        alt="Step Preview"
-                        className="w-full h-96 object-contain border-2 border-sky-200 rounded-xl shadow-lg" />
-                </div>
-            </div></><div className="bg-gray-100 py-12 flex flex-col items-center">
-                <h2 className="text-3xl font-bold text-sky-800 mb-6">Model Comparison</h2>
-                <div className="flex items-center justify-center space-x-4">
-                    <button
-                        onClick={() => setCarouselIndex((carouselIndex - 1 + modelImages.length) % modelImages.length)}
-                        className="px-4 py-2 bg-sky-700 text-white rounded hover:bg-sky-600"
-                    >
-                        Prev
-                    </button>
-                    <img
-                        src={modelImages[carouselIndex]}
-                        alt="Model Result"
-                        className="w-[500px] h-[300px] object-contain border border-gray-400 rounded-lg" />
-                    <button
-                        onClick={() => setCarouselIndex((carouselIndex + 1) % modelImages.length)}
-                        className="px-4 py-2 bg-sky-700 text-white rounded hover:bg-sky-600"
-                    >
-                        Next
-                    </button>
-                </div>
-            </div></><div className="bg-sky-800 text-white p-6 text-center">
-                <p className="text-lg">Macrohard</p>
-            
-                <p>GitHub: <a href="https://github.com/nnam101016/polyp-detection-webapp" className="underline" target="_blank">github.com/ourrepo</a></p>
-            </div></>
-    );
+      {/* Footer */}
+      <footer className="bg-clear-sky py-8 text-center">
+        <div className="flex flex-col sm:flex-row justify-center gap-6 text-lg font-medium">
+          <Link to="/faq">FAQ</Link>
+          <Link to="/tos">Terms of Service</Link>
+          <Link to="/contact">Contact Us</Link>
+          <Link to="/about">About Us</Link>
+        </div>
+      </footer>
+    </div>
+  );
 }
-
 export default HomePage;
