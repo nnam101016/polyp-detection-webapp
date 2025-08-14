@@ -1,73 +1,135 @@
+// UploadHistory.jsx
 import React, { useEffect, useState } from "react";
+import ResultView from "./ResultView";
 import API from "./api";
 
-const UploadHistory = () => {
-  const [history, setHistory] = useState([]);
+function ResultPreview({ result }) {
+  if (!result) return <>—</>;
+
+  const { summary = {}, detections = [] } = result;
+  const classesText = summary.class_counts
+    ? Object.entries(summary.class_counts)
+        .map(([k, v]) => `${k}(${v})`)
+        .join(", ")
+    : "—";
+
+  return (
+    <div className="text-sm">
+      <div><strong>Detections:</strong> {summary.num_detections ?? 0}</div>
+      <div><strong>Classes:</strong> {classesText}</div>
+      <div>
+        <strong>Conf:</strong> mean {summary.confidence_mean?.toFixed?.(2) ?? "0.00"},
+        {" "}max {summary.confidence_max?.toFixed?.(2) ?? "0.00"}
+      </div>
+
+      <details className="mt-1">
+        <summary className="cursor-pointer">Show detections</summary>
+        <ul className="list-disc ml-5">
+          {detections.map((d, i) => (
+            <li key={i}>
+              {d.class_name} ({d.confidence?.toFixed?.(2) ?? "—"}) — xyxy: [
+              {d.bbox_xyxy?.map(n => (typeof n === "number" ? n.toFixed(1) : n)).join(", ")}]
+              {d.mask_area_px ? ` — mask px: ${d.mask_area_px}` : ""}
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      <details className="mt-1">
+        <summary className="cursor-pointer">Raw JSON</summary>
+        <pre className="whitespace-pre-wrap text-xs">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+export default function UploadHistory() {
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      const res = await API.get("/history");
+      setItems(res.data || []);
+    } catch (e) {
+      setErr(e.response?.data?.detail || "Failed to load history.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await API.get("/history");
-        setHistory(res.data);
-      } catch (err) {
-        console.error("Failed to fetch upload history:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchHistory();
   }, []);
 
-  if (loading) {
-    return <p className="text-center text-gray-600">Loading history...</p>;
-  }
-
-  if (history.length === 0) {
-    return <p className="text-center text-gray-600">No uploads yet.</p>;
-  }
+  if (loading) return <div className="text-gray-600">Loading history…</div>;
+  if (err) return <div className="text-red-600">{err}</div>;
+  if (!items.length) return <div className="text-gray-600">No uploads yet.</div>;
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4 text-center">Upload History</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {history.map((item, idx) => (
-          <div key={idx} className="bg-white rounded shadow p-4">
-            <div className="grid grid-cols-2 gap-4 mb-2">
-              <div>
-                <p className="font-semibold text-sm mb-1">Original Image</p>
-                <img
-                  src={item.s3_url}
-                  alt="Original"
-                  className="w-full h-auto rounded border"
-                />
-              </div>
-              <div>
-                <p className="font-semibold text-sm mb-1">Processed Image</p>
-                <img
-                  src={item.processed_s3_url}
-                  alt="Processed"
-                  className="w-full h-auto rounded border"
-                />
-              </div>
-            </div>
-
-            <div className="text-sm text-gray-700">
-              <p><strong>Patient Name:</strong> {item.patient_name}</p>
-              <p><strong>Patient ID:</strong> {item.patient_id}</p>
-              <p><strong>Result:</strong> {item.result}</p>
-              {item.notes && <p><strong>Notes:</strong> {item.notes}</p>}
-              <p className="text-gray-500 text-xs mt-1">
-                <strong>Uploaded At:</strong>{" "}
-                {new Date(item.datetime).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        ))}
+    <div className="w-full max-w-6xl bg-white p-6 rounded shadow">
+      <h2 className="text-xl font-semibold mb-4">Upload History</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left border-b">
+              <th className="p-2">When</th>
+              <th className="p-2">Patient</th>
+              <th className="p-2">Model</th>
+              <th className="p-2">Original</th>
+              <th className="p-2">Processed</th>
+              <th className="p-2">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((u, i) => (
+              <tr key={i} className="border-b align-top">
+                <td className="p-2">
+                  {u.datetime ? new Date(u.datetime).toLocaleString() : "—"}
+                </td>
+                <td className="p-2">
+                  <div><strong>{u.patient_name || "—"}</strong></div>
+                  <div className="text-xs text-gray-600">ID: {u.patient_id || "—"}</div>
+                  {u.notes && <div className="text-xs mt-1">📝 {u.notes}</div>}
+                </td>
+                <td className="p-2">{u.model_used || "default"}</td>
+                <td className="p-2">
+                  {u.s3_url ? (
+                    <a
+                      className="text-blue-600 underline"
+                      href={u.s3_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open
+                    </a>
+                  ) : "—"}
+                </td>
+                <td className="p-2">
+                  {u.processed_s3_url ? (
+                    <a
+                      className="text-blue-600 underline"
+                      href={u.processed_s3_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open
+                    </a>
+                  ) : "—"}
+                </td>
+                <td className="p-2">
+                  {/* THIS is the key: render the dict, don't print it directly */}
+                  <ResultView result={u.result} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
-};
-
-export default UploadHistory;
+}

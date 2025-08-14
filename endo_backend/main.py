@@ -11,6 +11,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from ultralytics import YOLO
 from jose import jwt, JWTError
+from collections import Counter
 import numpy as np
 import os
 import s3
@@ -83,6 +84,74 @@ class UserUpdate(BaseModel):
     address: str = ""
     occupation: str = ""
     phone: str = ""
+
+#Convert to Dictionary
+def yolo_result_to_dict(res, names: dict):
+    dets = []
+
+    boxes = getattr(res, "boxes", None)
+    if boxes is not None and boxes.xyxy is not None:
+        xyxy = boxes.xyxy.cpu().numpy()
+        xywh = boxes.xywh.cpu().numpy()
+        conf = boxes.conf.cpu().numpy() if boxes.conf is not None else None
+        cls  = boxes.cls.cpu().numpy()  if boxes.cls  is not None else None
+
+        img_h, img_w = res.orig_shape if getattr(res, "orig_shape", None) else (-1, -1)
+
+        for i in range(xyxy.shape[0]):
+            cls_id = int(cls[i]) if cls is not None else -1
+            w = float(xywh[i][2])
+            h = float(xywh[i][3])
+            det = {
+                "detection_id": i,
+                "class_id": cls_id,
+                "class_name": names.get(cls_id, str(cls_id)),
+                "confidence": float(conf[i]) if conf is not None else None,
+
+                # Bounding box formats
+                "bbox_xyxy": [float(v) for v in xyxy[i]],
+                "bbox_xywh": [float(v) for v in xywh[i]],
+                "bbox_area_px": round(w * h, 2),
+
+                # Normalized coords (0–1)
+                "bbox_xyxy_norm": [float(v) / img_w if idx % 2 == 0 else float(v) / img_h 
+                                    for idx, v in enumerate(xyxy[i])],
+                "bbox_xywh_norm": [float(v) / img_w if idx % 2 == 0 else float(v) / img_h 
+                                    for idx, v in enumerate(xywh[i])],
+
+                # Aspect ratio
+                "aspect_ratio": round(w / h, 4) if h > 0 else None
+            }
+            dets.append(det)
+
+    # Masks
+    if getattr(res, "masks", None) is not None and res.masks is not None and len(dets) == len(res.masks):
+        masks = res.masks.data.cpu().numpy()
+        for i in range(len(dets)):
+            dets[i]["mask_area_px"] = int(masks[i].round().sum())
+            # Optional: polygon points
+            try:
+                polygons = res.masks.xy[i]  # list of [x,y] coords
+                dets[i]["mask_polygons"] = [list(map(float, p)) for p in polygons]
+            except Exception:
+                pass
+
+    # Summary
+    confs = [d["confidence"] for d in dets if d["confidence"] is not None]
+    class_counts = Counter([d["class_name"] for d in dets])
+    speed = getattr(res, "speed", {}) or {}
+
+    summary = {
+        "num_detections": len(dets),
+        "class_counts": dict(class_counts),
+        "confidence_mean": float(np.mean(confs)) if confs else 0.0,
+        "confidence_max": float(np.max(confs)) if confs else 0.0,
+        "image_size": {"width": int(img_w), "height": int(img_h)},
+        "time_ms": {k: float(v) for k, v in speed.items()}
+    }
+
+    return {"detections": dets, "summary": summary}
+
 
 # Register
 @app.post("/register")
@@ -198,7 +267,7 @@ async def upload(
     patient_name: str = Form(...),
     patient_id: str = Form(...),
     notes: str = Form(""),
-    model_name: str = Form("default"),   # 👈 NEW
+    model_name: str = Form("default"),
     current_user: dict = Depends(get_current_user)
 ):
     if model_name not in AVAILABLE_MODELS:
@@ -209,42 +278,24 @@ async def upload(
 
     for file in files:
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
-
-        # Read file bytes
         image_bytes = await file.read()
 
-        # Upload original image
         s3_url = s3.upload_to_s3(io.BytesIO(image_bytes), unique_filename)
-
-        # Open image
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        # Predict with selected YOLO model
-        results = model.predict(image)
+        preds = model.predict(image, verbose=False)
+        res = preds[0]
 
-        # Processed image (with annotations)
-        rendered = results[0].plot()
-        rendered_pil = Image.fromarray(rendered)
+        # Use dict (not JSON string)
+        result_dict = yolo_result_to_dict(res, model.names)
 
+        rendered = res.plot()
         buffer = io.BytesIO()
-        rendered_pil.save(buffer, format="JPEG")
+        Image.fromarray(rendered).save(buffer, format="JPEG")
         buffer.seek(0)
-
         processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
 
-        # Prepare result labels
-        detected_classes = [model.names[int(cls)] for cls in results[0].boxes.cls]
-        confidences = [float(conf) for conf in results[0].boxes.conf]
-
-        if detected_classes:
-            result_label = ", ".join(
-                [f"{cls} ({conf:.2f})" for cls, conf in zip(detected_classes, confidences)]
-            )
-        else:
-            result_label = "No objects detected"
-
-        # Store metadata in MongoDB
-        await scans_collection.insert_one({
+        doc = {
             "user_id": str(current_user["_id"]),
             "user_email": current_user["email"],
             "patient_name": patient_name,
@@ -253,15 +304,16 @@ async def upload(
             "filename": unique_filename,
             "s3_url": s3_url,
             "processed_s3_url": processed_s3_url,
-            "result": result_label,
+            "result": result_dict,  
             "notes": notes,
-            "model_used": model_name  # 👈 store chosen model
-        })
+            "model_used": model_name
+        }
+        await scans_collection.insert_one(doc)
 
         upload_results.append({
             "s3_url": s3_url,
             "processed_s3_url": processed_s3_url,
-            "result": result_label,
+            "result": result_dict,  
             "model": model_name
         })
 

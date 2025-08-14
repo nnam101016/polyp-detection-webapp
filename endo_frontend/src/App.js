@@ -3,7 +3,7 @@ import API from "./api";
 import UploadHistory from "./UploadHistory";
 import ImageCompare from "./components/ImageCompare";
 import AdminDashboard from "./components/AdminDashboard";
-
+import ResultView from "./ResultView";
 
 function App() {
   // Upload state
@@ -46,7 +46,7 @@ function App() {
     formData.append("patient_name", patientName);
     formData.append("patient_id", patientId);
     formData.append("notes", notes);
-    formData.append("model", model);
+    formData.append("model_name", model);
 
     setMessage("Uploading...");
     setUploadResults([]);
@@ -262,7 +262,7 @@ function App() {
                   originalUrl={previewUrls[i]} // ⬅ original image from preview
                   processedUrl={res.processed_s3_url} // ⬅ processed image from backend
                 />
-                <p className="text-sm text-center">{res.result}</p>
+                <ResultView result={res.result} />
               </div>
             ))}
           </div>
