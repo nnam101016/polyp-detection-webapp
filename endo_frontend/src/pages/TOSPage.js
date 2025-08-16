@@ -5,7 +5,7 @@ function TOSandFAQPage() {
                 <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-md">
                     <h1 className="text-2xl font-bold mb-4">Terms of Service</h1>
                     <p className="mb-4">
-                        By using this application, you agree to the following terms and conditions...
+                        To be updated...
                     </p>
                     {/* Add more content as needed */}
                 </div>

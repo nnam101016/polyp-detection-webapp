@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*TOD: Add breakpoints for small, large*/
+@layer components{
+  .bar-style {
+    @apply w-full h-[12vh] bg-egypt-blue text-clear-sky flex flex-wrap gap-2 items-center justify-between;
+  }
+
+  .button-enlarge {
+    @apply rounded-full w-fit p-4 text-lg bg-select-yellow text-egypt-blue font-bold;
+  }
+
+  .button-enlarge:hover {
+    @apply scale-110 transition-transform duration-200 ease-in-out;
+  }
+
+  .button-border{
+    @apply rounded-full border border-egypt-blue bg-transparent w-fit p-4 border-2 text-lg text-egypt-blue font-bold;
+  }
+
+  .button-border:hover {
+    @apply transition duration-200 ease-in-out bg-egypt-blue text-white;
+  }
+
+  .panel-sky{
+    @apply bg-clear-sky rounded-2xl;
+  }
+}

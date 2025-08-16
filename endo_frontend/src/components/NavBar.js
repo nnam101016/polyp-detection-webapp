@@ -4,21 +4,23 @@ import {Link} from "react-router-dom"
 
 function NavBar(){
     return (
-        <div className= " w-screen h-[12vh] container mx-auto flex flex-wrap justify-between items-center shadow-md bg-white">
-            <img src= {logo} alt="Logo" className="h-2/3"/>
-            <div className="text-3xl font-bold text-egypt-blue">
-                    EndoDetect
-            </div>
-            <div className="">
-
-            </div>
-            <Link to="/diagnosis" className="text-egypt-blue hover:text-clear-sky"> Diagnostic </Link>
-            <Link to="/analytic" className="text-egypt-blue hover:text-clear-sky p-x-3">Analytic</Link>
-            <Link to="/login">
-                <button className="bg-egypt-blue text-white items-center px-6 py-2 font-bold rounded-full hover:opacity-75 transition duration-200">
-                    Login
-                </button>
+        <div className= "sticky bar-style shadow-lg">
+            <Link className="self-start justify-self-start flex items-center" to="/">
+                <img src= {logo} alt="Logo" className="h-16"/>
+                <div className="text-3xl font-bold">
+                        EndoDetect
+                </div>
             </Link>
+
+            <div className='flex items-center'>
+                <Link to="/diagnosis" className=" mr-4  hover:text-select-yellow"> Diagnostic </Link>
+                <Link to="/analytic" className="mr-4 hover:text-select-yellow ">Analytic</Link>
+                <Link to="/login">
+                    <button className="button-enlarge mr-4 py-2">
+                        Login
+                    </button>
+                </Link>
+            </div>
         </div>
     );
 }

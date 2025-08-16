@@ -2,9 +2,11 @@ import {Link} from "react-router-dom";
 
 function Footer (){
     return (
-        <footer className="flex gap-10 py-1 mx-auto text-md content-center justify-center flex-wrap text-gray-600">
-            <Link to="/analytic" className="hover:text-gray-400">User Feedbacks</Link>
-            <Link to="/terms" className="hover:text-gray-400">Term of Services/Privacy Policies/FAQ</Link>
+        <footer className="bar-style px-8">
+            <Link to="/about" className="px-4  hover:text-select-yellow">About Us</Link>
+            <Link to="/terms" className="px-4  hover:text-select-yellow">TOS</Link>
+            <Link to="/faq" className="px-4  hover:text-select-yellow">FAQ</Link>
+            <Link to="/contact" className="px-4  hover:text-select-yellow">Contact Us</Link>
         </footer>
     );
 }

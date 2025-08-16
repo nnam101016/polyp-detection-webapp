@@ -1,31 +1,34 @@
+const items = [
+    {
+        img: "https://c7.alamy.com/comp/D3HJNR/colon-endoscopy-result-D3HJNR.jpg",
+        caption: "Low Mode"
+    },
+    {
+        img: "https://c7.alamy.com/comp/CT58JE/stomach-endoscopy-result-CT58JE.jpg",
+        caption: "High Mode"
+    },
+    {
+        img: "https://media.springernature.com/full/springer-static/image/art%3A10.1155%2F2010%2F814319/MediaObjects/13640_2010_Article_338_Fig2_HTML.jpg?as=webp",
+        caption: "Segmentation Mode"
+    }
+]
+
 function CarouselWithText() {
     return (
-        <div className="carousel-container w-full">
-            <div className="carousel-item">
-                1
+        <div className="w-full py-8">
+            <div className="flex flex-row gap-8 justify-center items-center">
+                {items.map((item, index) => (
+                    <div key={index} className="flex flex-col items-center">
+                        <img
+                            
+                            src={item.img}
+                            alt={item.caption}
+                            className="h-64 w-64 object-cover rounded-lg shadow-lg"
+                        />
+                        <p className="mt-4 text-center text-lg text-egypt-blue">{item.caption}</p>
+                    </div>
+                ))}
             </div>
-
-            <div className="carousel-item">
-               2
-            </div>
-            <div className="carousel-item">
-                3
-            </div>
-            {/* <img
-                src="https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2560&q=80"
-                alt="Endoscopic Image 1"
-                className="h-full w-full object-cover"
-            />
-            <img
-                src="https://images.unsplash.com/photo-1493246507139-91e8fad9978e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2940&q=80"
-                alt="Endoscopic Image 2"
-                className="h-full w-full object-cover"
-            />
-            <img
-                src="https://images.unsplash.com/photo-1518623489648-a173ef7824f3?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2762&q=80"
-                alt="Endoscopic Image 3"
-                className="h-full w-full object-cover"
-            /> */}
         </div>
     );
 }

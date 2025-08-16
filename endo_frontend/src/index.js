@@ -1,12 +1,19 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+
 import Diagnosis from "./pages/DiagnosisPage";
 import HomePage from "./pages/HomePage";
 import Analytics from "./pages/AnalyticsPage";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import TOSandFAQPage from "./pages/TOSandFQAPage";
+import Profile from "./pages/ProfilePage";
+
+import TOS from "./pages/TOSPage";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
+import Error from "./pages/Error";
+import FAQPage from "./pages/FAQPage";
+
 import NavBar from "./components/NavBar";
 import Footer from "./components/Footer";
 // TODO: import a page for error
@@ -19,17 +26,22 @@ root.render(
     <>
       <Router>
         <NavBar/>
+
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/diagnosis" element={<Diagnosis />} />
-          <Route path="/analytic" element={<Analytics/>} />
-          <Route path="/profile" element={<></>}></Route>
-          <Route path="/terms" element={<TOSandFAQPage />} />
-          <Route path="*" element={<h1>404 Not Found</h1>} />
+          <Route path="/" element={<HomePage/>}/>
+          <Route path="/login" element={<Login/>}/>
+          <Route path="/diagnosis" element={<Diagnosis/>}/>
+          <Route path="/analytic" element={<Analytics/>}/>
+          <Route path="/profile" element={<Profile/>}/>
+
+          <Route path="/terms" element={<TOS/>} />
+          <Route path="/about" element={< About/>}/>
+          <Route path="/faq" element={<FAQPage/>}/>
+          <Route path="/contact" element={<Contact/>}/>
+          <Route path="*" element={<Error/>} />
         </Routes>
-        <Footer />
+
+        <Footer/>
       </Router>
       
     </>

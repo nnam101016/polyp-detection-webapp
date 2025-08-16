@@ -2,7 +2,7 @@ import {Link} from "react-router-dom";
 
 function FeedbackForm() {
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <div className="container flex flex-col items-center justify-center bg-gray-100">
             <h1 className="text-3xl font-bold mb-6">Feedback Form</h1>
             <form className="bg-white p-8 rounded shadow-md w-full max-w-md">
                 <div className="mb-4">
@@ -18,14 +18,7 @@ function FeedbackForm() {
                     <textarea id="feedback" rows="4" className="w-full px-3 py-2 border rounded" placeholder="Your Feedback"></textarea>
                 </div>
                 <button type="submit" className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Submit</button>
-            </form>
-
-            <Link to="/">
-                <button className="text-blue-500 hover:underline mt-4">
-                    Back to Home
-                </button>
-            </Link>
-            
+            </form>            
         </div>
     );
 }
