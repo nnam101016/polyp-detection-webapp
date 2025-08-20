@@ -1,34 +1,53 @@
-const items = [
-    {
-        img: "https://c7.alamy.com/comp/D3HJNR/colon-endoscopy-result-D3HJNR.jpg",
-        caption: "Low Mode"
-    },
-    {
-        img: "https://c7.alamy.com/comp/CT58JE/stomach-endoscopy-result-CT58JE.jpg",
-        caption: "High Mode"
-    },
-    {
-        img: "https://media.springernature.com/full/springer-static/image/art%3A10.1155%2F2010%2F814319/MediaObjects/13640_2010_Article_338_Fig2_HTML.jpg?as=webp",
-        caption: "Segmentation Mode"
-    }
-]
+import { useState} from "react";
 
-function CarouselWithText() {
+function DirectBt({arrow, onClickTrigger}){
+    return(
+        <button onClick={onClickTrigger} className="h-1/3 w-1/10 m-4 text-white font-bold text-xl bg-black rounded-2xl p-5">
+            {arrow}
+        </button>
+    )
+}
+
+function Card({id, image}){   
     return (
-        <div className="w-full py-8">
-            <div className="flex flex-row gap-8 justify-center items-center">
-                {items.map((item, index) => (
-                    <div key={index} className="flex flex-col items-center">
-                        <img
-                            
-                            src={item.img}
-                            alt={item.caption}
-                            className="h-64 w-64 object-cover rounded-lg shadow-lg"
-                        />
-                        <p className="mt-4 text-center text-lg text-egypt-blue">{item.caption}</p>
-                    </div>
-                ))}
+    <div className="w-full h-full flex flex-col items-center overflow-hidden gap-4">
+        <img
+            src={image}
+            alt={id}
+            className="object-cover"
+        />
+    </div>
+    )
+}
+
+function CarouselWithText( {cards} ) {
+    const [index, setIndex] = useState(0)
+
+    const onClkLeft = () =>{
+        setIndex(index > 0 ? index - 1 : index)
+        
+    }
+    const onClkRight = () =>{
+        setIndex(index < cards.length - 1 ? index + 1 : index)
+    }
+
+    return (
+        <div className="w-full h-full flex flex-col justify-center gap-4">
+            <div className="h-64 flex flex-row gap-3 items-center ">
+                <DirectBt
+                    arrow = "<"
+                    onClickTrigger = {onClkLeft}
+                />
+                <Card
+                    id={cards[index].id}
+                    image={cards[index].src}
+                />
+                <DirectBt
+                    arrow = ">"
+                    onClickTrigger = {onClkRight}   
+                />
             </div>
+            <p className="text-center text-egypt-blue text-xl justify-self-end">{cards[index].text}</p>
         </div>
     );
 }

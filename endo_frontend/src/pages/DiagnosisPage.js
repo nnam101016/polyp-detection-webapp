@@ -1,41 +1,49 @@
-import { useState } from 'react';
+import { useState , useEffect} from 'react';
 import {useDropzone} from 'react-dropzone'
 import addericon from '../image/file-add.svg'
+import CarouselWithText from "../components/CarouselWithText";
 
 function DiagnosisPage() {
-  const [image, setImage] = useState(null);
+  const [files, setFiles] = useState([]); // file from here return as [{preview: ..., name: ..., , Prop: ... , etc...}]
 
   const handleRemoveImage = () => {
-    setImage(null);
+    setFiles([]);
   }
 
   const {getRootProps, getInputProps, isDragActive, open} = useDropzone({
-        accept: {
-            'image/jpeg': ['.jpeg', '.jpg'],
-            'image/png': ['.png'],
-            // only image types allowed
-        },
+        accept: {'image/*':[]},
         noClick: true,
-        onDrop: (acceptedFiles, rejectedFiles) =>{
-            console.log(acceptedFiles)
-            console.log(rejectedFiles)
-        }
-    })
+        onDrop: acceptedFiles => {
+          console.log(acceptedFiles)
+          setFiles(acceptedFiles.map(file => Object.assign(file, {
+            preview: URL.createObjectURL(file)
+        })));
+    }})
+
+   useEffect(() => {
+    // Make sure to revoke the data uris to avoid memory leaks, will run on unmount
+    return () => files.forEach(file => URL.revokeObjectURL(file.preview));
+  }, [files]);
 
   return (
-    <div className="flex flex-col items-center h-screen justify-center">
-        {image ? (
-          <div className="h-1/2 w-2/3 p-4">
-            <img src={image} alt="Preview" className="object-contain"/>
-            <button className="button-enlarge m-4" onClick={handleRemoveImage}>
-                Delete
+    <div className="w-screen h-screen flex flex-col items-center justify-center">
+        {files.length !== 0 ? (
+          <div className="h-2/3 w-4/5 p-10 border-4 border-egypt-blue panel-sky flex flex-col justify-center items-center">
+            <CarouselWithText
+              cards={files.map((file, i) => ({
+                id: i,
+                src: file.preview,
+              }))}
+            />
+            <button className="button-border mt-4" onClick={handleRemoveImage}>
+              Delete
             </button>
           </div>
         ): (
-          <div className="h-2/3 w-4/5 m-10">
+          <div className="h-2/3 w-4/5">
             <div {...getRootProps()} 
-            className={isDragActive? "bg-opacity-100 w-full h-full gap-6 flex flex-col items-center justify-center panel-sky border-4 border-dashed border-egypt-blue"
-                                    :"bg-opacity-50 w-full h-full gap-6 flex flex-col items-center justify-center panel-sky border-4 border-dashed border-egypt-blue"
+            className={isDragActive? "dropzone bg-opacity-100 w-full h-full gap-6 flex flex-col items-center justify-center panel-sky border-4 border-dashed border-egypt-blue"
+                                    :"dropzone bg-opacity-50 w-full h-full gap-6 flex flex-col items-center justify-center panel-sky border-4 border-dashed border-egypt-blue"
             }>
               <input {...getInputProps()} />
               {!isDragActive ?

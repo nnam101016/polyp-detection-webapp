@@ -5,14 +5,20 @@ import banner from '../image/home_banner.jpg';
 import LeftPanelBox from "../components/LeftPanelBox";
 import { useState } from "react";
 
-import model1 from "../image/model1.png";
-import model2 from "../image/model2.png";
-import model3 from "../image/model3.png";
+import sam1 from "../image/bg2.avif"
+import sam2 from "../image/bg1.avif"
+import sam3 from "../image/bg2.avif"
+
+const cards = [
+    {id: 1, src: sam1, text: "This is input"}, 
+    {id: 2, src: sam2, text: "This is detectation"}, 
+    {id: 3, src: sam3, text: "This is segmentation"},  
+]
 
 const paragraphInstruct = [
     {step: "step1", content: "Check the Navbar and click on what page you want to go."},
     {step: "step2", content: "Upload endoscopic image(s)/video in the supported format and size for analysis."},
-    {step: "step3", content: "Select mode of analysis (low - high - segmentation), run the analysis and wait."},
+    {step: "step3", content: "Select mode of analysis (detection - segmentation), run the analysis and wait."},
     {step: "step4", content: "The result will appear in the same page, replacing the upload bar. You can choose to save and retry with different images and modes"},
     {step: "step5", content: "Go back to homepage and navigate Analytics page. Scroll through the collection. You can move, delete or download the results from there"}
 ]
@@ -22,7 +28,7 @@ function HomePage(){
 
     const currText = paragraphInstruct.find(item => item.step === selected)?.content || "ERROR: No text are found matching the step";
     return (
-        <div className="w-full">
+        <div className="h-full w-full flex flex-col items-center">
             <div className="flex justify-center items-center flex-row">
                 <img src={banner} alt="Endoscopic Homepage Banner" className="w-1/3 my-5"/>
 
@@ -33,7 +39,7 @@ function HomePage(){
                     <p className="w-full text-lg flex-wrap mt-2 mb-10 text-select-yellow">
                         Upload your images and let our advanced AI help you detect potential polyps with high accuracy.
                     </p>
-                    <div className="flex justify-center items-center flex-row">
+                    <div className="flex justify-center items-center flex-row gap-6">
                         <Link to="diagnosis">
                             <button className="button-border">
                                 Start Diagnosis
@@ -49,7 +55,7 @@ function HomePage(){
                 </div>
             </div>
 
-            <div className="flex h-1/2 justify-center items-center w-full">
+            <div className="flex h-1/2 justify-center items-center w-full gap-8">
                 <img src={EndoSample} alt="Endoscopic Sample" className="w-1/3 h-3/4 object-cover"/>
                 <div className="text-center w-1/3">
                     <h2 className="text-egypt-blue text-4xl font-bold mb-4">How It Works</h2>
@@ -63,8 +69,11 @@ function HomePage(){
                     </p>
                 </div>
             </div>
+
+            <div className="w-2/3  panel-sky p-10">
+                <CarouselWithText cards={cards}/>
+            </div>
             
-            <CarouselWithText/>
 
             <div className="flex flex-row w-full justify-center items-center py-10 gap-10">
                 <LeftPanelBox selected={selected} onSelect={setSelected} className = "w-1/4"/>
