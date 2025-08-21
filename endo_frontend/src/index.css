@@ -27,6 +27,10 @@
   .panel-sky{
     @apply bg-clear-sky rounded-2xl;
   }
+
+  .panel-yellow{
+    @apply bg-select-yellow rounded-2xl
+  }
 }
 
 @keyframes next {

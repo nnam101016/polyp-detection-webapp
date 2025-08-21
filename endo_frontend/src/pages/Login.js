@@ -16,12 +16,6 @@ function Login() {
 //   };
 
   return (
-    <>
-      <Link to="/">
-          <button className="button-border mt-8">
-            Back to Home
-          </button>
-        </Link>
       <div className="w-full h-full items-center flex justify-center">
         <div className="bg-white p-8 rounded-lg shadow-lg w-1/3 flex justify-center items-center flex-col">
           <h2 className="font-bold text-6xl text-sky-800"> LOGIN </h2>
@@ -51,7 +45,6 @@ function Login() {
         </button>
         </div>
       </div>
-    </>
   );
 }
 

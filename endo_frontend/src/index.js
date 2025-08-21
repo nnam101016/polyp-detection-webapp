@@ -13,6 +13,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Error from "./pages/Error";
 import FAQPage from "./pages/FAQPage";
+import FeedbackForm from "./pages/FeedbackForm";
 
 import NavBar from "./components/NavBar";
 import Footer from "./components/Footer";
@@ -32,6 +33,7 @@ root.render(
           <Route path="/login" element={<Login/>}/>
           <Route path="/diagnosis" element={<Diagnosis/>}/>
           <Route path="/analytic" element={<Analytics/>}/>
+          <Route path="/feedback" element={<FeedbackForm/>}/>
           <Route path="/profile" element={<Profile/>}/>
 
           <Route path="/terms" element={<TOS/>} />

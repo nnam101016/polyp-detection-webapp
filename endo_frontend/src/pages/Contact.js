@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom';
-
 export default function Contact() {
   // team emails (the ones you provided)
   const teamEmails = [
@@ -19,7 +17,7 @@ export default function Contact() {
           We’re here to help! Feel free to reach out through any of the channels below:
         </p>
 
-        <ul className="space-y-4 text-base sm:text-lg">
+        <ul className="flex flex-col space-y-4 text-base sm:text-lg word-break break-words">
           <li><strong>Support Email:</strong> <a href="mailto:support@endodetect.com" className="text-blue-600 hover:underline">support@endodetect.com</a></li>
           <li><strong>Discord:</strong> <a href="https://discord.com/channels/1342737140257132566/1342737140257132569" className="text-blue-600 hover:underline">https://discord.com/channels/1342737140257132566/1342737140257132569</a></li>
           <li><strong>GitHub:</strong> <a href="https://github.com/nnam101016/polyp-detection-webapp" className="text-blue-600 hover:underline">https://github.com/nnam101016/polyp-detection-webapp</a></li>
@@ -34,10 +32,6 @@ export default function Contact() {
               </a>
             ))}
           </div>
-        </div>
-
-        <div className="text-center">
-          <Link to="/" className="btn-primary">Return to Home</Link>
         </div>
       </div>
     </div>

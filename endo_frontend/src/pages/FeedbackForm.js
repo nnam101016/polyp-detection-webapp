@@ -1,5 +1,3 @@
-import {Link} from "react-router-dom";
-
 function FeedbackForm() {
     return (
         <div className="container flex flex-col items-center justify-center bg-gray-100">

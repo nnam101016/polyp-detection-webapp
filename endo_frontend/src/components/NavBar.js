@@ -15,6 +15,7 @@ function NavBar(){
             <div className='flex items-center'>
                 <Link to="/diagnosis" className=" mr-4  hover:text-select-yellow"> Diagnostic </Link>
                 <Link to="/analytic" className="mr-4 hover:text-select-yellow ">Analytic</Link>
+                <Link to="/feedback" className="mr-4 hover:text-select-yellow ">Feedback</Link>
                 <Link to="/login">
                     <button className="button-enlarge mr-4 py-2">
                         Login

@@ -39,7 +39,7 @@ function HomePage(){
                     <p className="w-full text-lg flex-wrap mt-2 mb-10 text-select-yellow">
                         Upload your images and let our advanced AI help you detect potential polyps with high accuracy.
                     </p>
-                    <div className="flex justify-center items-center flex-row gap-6">
+                    <div className="flex w-full justify-center items-center flex-row gap-6">
                         <Link to="diagnosis">
                             <button className="button-border">
                                 Start Diagnosis
@@ -47,7 +47,7 @@ function HomePage(){
                         </Link>
                         <Link to="faq">
                             <button className="button-border">
-                                Learn More
+                                Learn More Here
                             </button>
                         </Link>
                     </div>
