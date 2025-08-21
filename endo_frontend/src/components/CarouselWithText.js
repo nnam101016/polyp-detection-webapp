@@ -33,7 +33,7 @@ function CarouselWithText( {cards} ) {
 
     return (
         <div className="w-full h-full flex flex-col justify-center gap-4">
-            <div className="h-64 flex flex-row gap-3 items-center ">
+            <div className="h-80 flex flex-row gap-3 items-center ">
                 <DirectBt
                     arrow = "<"
                     onClickTrigger = {onClkLeft}

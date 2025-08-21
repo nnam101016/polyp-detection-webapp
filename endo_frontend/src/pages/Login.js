@@ -1,10 +1,3 @@
-import { useState } from "react";
-import {Link} from "react-router-dom";
-function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-
 //   const handleLogin = async () => {
 //     try {
 //       const res = await API.post("/login", { email, password });
@@ -15,37 +8,65 @@ function Login() {
 //     }
 //   };
 
+import React, { useState } from "react";
+
+const Login = ({ onLogin }) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const success = onLogin(username, password);
+    if (!success) {
+      setError("Invalid username or password.");
+    } else {
+      setError("");
+    }
+  };
+
   return (
-      <div className="w-full h-full items-center flex justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg w-1/3 flex justify-center items-center flex-col">
-          <h2 className="font-bold text-6xl text-sky-800"> LOGIN </h2>
+    <form className="login" onSubmit={handleSubmit}>
+      <h2>Login</h2>
+
+      {error && <p className="error-message">{error}</p>}
+
+      <div className="input-group">
+        <label>Username</label>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter username"
+        />
+      </div>
+
+      <div className="input-group">
+        <label>Password</label>
+        <div className="password-wrapper">
           <input
-            className="border rounded-md p-2 mb-4 w-full"
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            className="border rounded-md p-2 mb-4 w-full"
-            type="password"
-            placeholder="Password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter password"
           />
-          <button className="rounded-md p-2 mb-4 w-full bg-sky-800 text-white text-xl" >Login</button>
-          <p>{message}</p>
-          <a href="/signup" className="text-sky-800 opacity-50">Don't have an account? Sign up</a>
-          <p className="my-2"> Or continue with </p>
-          <button className="rounded-xl bordered border-2 border-black rounded-md p-4 w-full mb-4">
-            Continue with Google
+          <button
+            type="button"
+            className="toggle-btn"
+            onClick={() => setShowPassword(!showPassword)}
+          >
+            {showPassword ? "🙈" : "👁️"}
           </button>
-          <button className="rounded-xl bordered border-2 border-black rounded-md p-4 w-full">
-            Continue with Apple
-        </button>
         </div>
       </div>
+
+      <button type="submit" className="login-btn">
+        Login
+      </button>
+    </form>
   );
-}
+};
 
 export default Login;
