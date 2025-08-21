@@ -214,12 +214,13 @@ function App() {
           {/* ✅ Model selection */}
           <div className="mb-4">
             <label className="block mb-1 font-semibold">Select Model</label>
-            <select value={model} onChange={(e) => setModel(e.target.value)}
-              className="border p-2 w-full">
-              <option value="default">Default Model</option>
-              <option value="fast">Fast Model</option>
-              <option value="accurate">Accurate Model</option>
-              <option value="experimental">Experimental Model</option>
+            <select value={model} onChange={(e) => setModel(e.target.value)} className="border p-2 w-full">
+              <option value="default">Default (YOLO)</option>
+              <option value="fast">Fast (YOLO)</option>
+              <option value="accurate">Accurate (YOLO)</option>
+              <option value="experimental">Experimental (YOLO)</option>
+              <option value="maskrcnn">Mask R-CNN (seg)</option>
+              <option value="unet">U-Net (seg)</option>
             </select>
           </div>
           <div className="mb-4">

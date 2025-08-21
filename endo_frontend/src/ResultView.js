@@ -1,3 +1,4 @@
+// ResultView.js
 import React, { useState } from "react";
 
 const fmt2 = (v) =>
@@ -35,6 +36,9 @@ function DetectionsTable({ detections }) {
   if (!detections?.length) return <div className="mt-2">No detections</div>;
   const toggle = (i) => setOpenRows((s) => ({ ...s, [i]: !s[i] }));
 
+  const hasBboxes = detections.some((d) => Array.isArray(d.bbox_xyxy));
+  const hasMasks = detections.some((d) => "mask_area_px" in d || "mask_polygons" in d);
+
   return (
     <div className="mt-3 border rounded">
       <div className="px-3 py-2 font-semibold bg-gray-50 border-b">Detections</div>
@@ -45,42 +49,90 @@ function DetectionsTable({ detections }) {
               <th className="p-2">#</th>
               <th className="p-2">Class</th>
               <th className="p-2">Conf</th>
-              <th className="p-2">xyxy</th>
-              <th className="p-2">w×h</th>
-              <th className="p-2">Area(px²)</th>
-              <th className="p-2">Aspect</th>
+
+              {hasBboxes && (
+                <>
+                  <th className="p-2">xyxy</th>
+                  <th className="p-2">w×h</th>
+                  <th className="p-2">Area(px²)</th>
+                  <th className="p-2">Aspect</th>
+                </>
+              )}
+
+              {!hasBboxes && hasMasks && (
+                <>
+                  <th className="p-2">Mask area(px)</th>
+                  <th className="p-2">Polygons</th>
+                </>
+              )}
+
               <th className="p-2">More</th>
             </tr>
           </thead>
           <tbody>
             {detections.map((d, i) => {
               const [x, y, w, h] = d.bbox_xywh || [];
+              const polyCount = Array.isArray(d.mask_polygons) ? d.mask_polygons.length : 0;
+
               return (
                 <React.Fragment key={i}>
                   <tr className="border-b align-top">
                     <td className="p-2">{d.detection_id ?? i}</td>
                     <td className="p-2">{d.class_name ?? d.class_id}</td>
                     <td className="p-2">{fmt2(d.confidence)}</td>
-                    <td className="p-2">[{join(d.bbox_xyxy)}]</td>
-                    <td className="p-2">{fmt2(w)} × {fmt2(h)}</td>
-                    <td className="p-2">{fmt2(d.bbox_area_px)}</td>
-                    <td className="p-2">{fmt2(d.aspect_ratio)}</td>
+
+                    {hasBboxes && (
+                      <>
+                        <td className="p-2">[{join(d.bbox_xyxy)}]</td>
+                        <td className="p-2">
+                          {fmt2(w)} × {fmt2(h)}
+                        </td>
+                        <td className="p-2">{fmt2(d.bbox_area_px)}</td>
+                        <td className="p-2">{fmt2(d.aspect_ratio)}</td>
+                      </>
+                    )}
+
+                    {!hasBboxes && hasMasks && (
+                      <>
+                        <td className="p-2">{fmt2(d.mask_area_px)}</td>
+                        <td className="p-2">{polyCount ? `${polyCount} polygon(s)` : "—"}</td>
+                      </>
+                    )}
+
                     <td className="p-2">
-                      <button className="underline text-blue-600" onClick={() => toggle(i)} type="button">
+                      <button
+                        className="underline text-blue-600"
+                        onClick={() => toggle(i)}
+                        type="button"
+                      >
                         {openRows[i] ? "Hide" : "Show"}
                       </button>
                     </td>
                   </tr>
+
                   {openRows[i] && (
                     <tr className="border-b bg-gray-50">
-                      <td className="p-2" colSpan={8}>
+                      <td className="p-2" colSpan={hasBboxes ? 8 : hasMasks ? 6 : 5}>
                         <div className="grid sm:grid-cols-2 gap-2">
-                          <KvRow label="xywh:">[{join(d.bbox_xywh)}]</KvRow>
-                          <KvRow label="xyxy (norm):">[{join(d.bbox_xyxy_norm)}]</KvRow>
-                          <KvRow label="xywh (norm):">[{join(d.bbox_xywh_norm)}]</KvRow>
-                          {"mask_area_px" in d && <KvRow label="Mask area(px):">{fmt2(d.mask_area_px)}</KvRow>}
-                          {"mask_polygons" in d && Array.isArray(d.mask_polygons) &&
-                            <KvRow label="Mask polygons:">{d.mask_polygons.length ? `${d.mask_polygons.length} polygon(s)` : "—"}</KvRow>}
+                          {/* BBox extras */}
+                          {hasBboxes && (
+                            <>
+                              <KvRow label="xywh:">[{join(d.bbox_xywh)}]</KvRow>
+                              <KvRow label="xyxy (norm):">[{join(d.bbox_xyxy_norm)}]</KvRow>
+                              <KvRow label="xywh (norm):">[{join(d.bbox_xywh_norm)}]</KvRow>
+                            </>
+                          )}
+                          {/* Mask extras */}
+                          {"mask_area_px" in d && (
+                            <KvRow label="Mask area(px):">{fmt2(d.mask_area_px)}</KvRow>
+                          )}
+                          {"mask_polygons" in d && Array.isArray(d.mask_polygons) && (
+                            <KvRow label="Mask polygons:">
+                              {d.mask_polygons.length
+                                ? `${d.mask_polygons.length} polygon(s)`
+                                : "—"}
+                            </KvRow>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -97,10 +149,12 @@ function DetectionsTable({ detections }) {
 
 export default function ResultView({ result }) {
   if (!result) return <>—</>;
-  const { summary = {}, detections = [] } = result;
+  const { summary = {}, detections = [], result_meta = {} } = result;
 
   const classesText = summary.class_counts
-    ? Object.entries(summary.class_counts).map(([k, v]) => `${k}(${v})`).join(", ")
+    ? Object.entries(summary.class_counts)
+        .map(([k, v]) => `${k}(${v})`)
+        .join(", ")
     : "—";
   const times = summary.time_ms || {};
 
@@ -110,13 +164,23 @@ export default function ResultView({ result }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-1">
           <KvRow label="Detections:">{summary.num_detections ?? 0}</KvRow>
           <KvRow label="Classes:">{classesText}</KvRow>
-          <KvRow label="Confidence:">mean {fmt2(summary.confidence_mean)}, max {fmt2(summary.confidence_max)}</KvRow>
+          <KvRow label="Confidence:">
+            mean {fmt2(summary.confidence_mean)}, max {fmt2(summary.confidence_max)}
+          </KvRow>
           <KvRow label="Image size:">
-            {summary.image_size ? `${summary.image_size.width}×${summary.image_size.height}` : "—"}
+            {summary.image_size
+              ? `${summary.image_size.width}×${summary.image_size.height}`
+              : "—"}
           </KvRow>
           <KvRow label="Timing (ms):">
-            {Object.keys(times).length ? Object.entries(times).map(([k, v]) => `${k}:${fmt2(v)}`).join("  ") : "—"}
+            {Object.keys(times).length
+              ? Object.entries(times)
+                  .map(([k, v]) => `${k}:${fmt2(v)}`)
+                  .join("  ")
+              : "—"}
           </KvRow>
+          {"task" in result_meta && <KvRow label="Task:">{result_meta.task}</KvRow>}
+          {"model_name" in result_meta && <KvRow label="Model:">{result_meta.model_name}</KvRow>}
         </div>
       </div>
 
