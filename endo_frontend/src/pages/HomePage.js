@@ -2,13 +2,16 @@ import React, { useState } from "react";
 import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
 import EndoSample from "../image/bg2.avif";
+import image from "../image/why detect.png";
+import {Link} from "react-router-dom";
+import LeftPanelBox, { navItems } from "../components/LeftPanelBox";
 
-import bgSample from "../image/bg2.avif";
-import model1 from "../images/model1.png";
-import model2 from "../images/model2.png";
-import model3 from "../images/model3.png";
 
 function HomePage() {
+  const [selected, setSelected] = useState("step1", "step2", "step3", "step4", "step5");
+
+  const selectedItem = navItems.find((i) => i.label === selected) || null;
+
   return (
     <div className="w-screen">
 
@@ -32,53 +35,64 @@ function HomePage() {
       {/* Why EndoDetect */}
       <section id="why" className="bg-clear-sky py-12 px-4 flex flex-col md:flex-row items-center gap-8">
         <img
-          src={EndoSample}
-          alt="Why EndoDetect"
-          className="flex-1 rounded-lg shadow-lg object-cover w-full sm:w-4/5 md:w-1/2"
+          src={image}
+          alt="Why EndoDetect?"
+          className="w-full md:w-1/3 flex flex-col items-center panel-sky p-6 shadow-lg"
         />
         <div className="flex-1 text-center md:text-left">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-4">Why EndoDetect</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4">Why EndoDetect?</h2>
           <p className="text-base sm:text-lg">
-            Fast, accurate, and easy-to-use AI tool designed to help healthcare professionals detect potential polyps in endoscopic images with confidence.
+            EndoDetect helps doctors quickly and accurately identify polyps in endoscopic images, 
+            improving diagnostic efficiency and patient care. Early detection is vital in preventing colorectal cancer,
+            and AI support reduces the risk of missed findings. The tool provides reliable assistance, 
+            enabling doctors to work with confidence and patients to receive timely treatment.
           </p>
         </div>
       </section>
-
-      {/* Carousel */}
-      <section className="py-12 px-4">
-        <CarouselWithText />
-      </section>
+      
 
       {/* Left Panel Instructions */}
       <section className="bg-clear-sky py-12 px-4 flex flex-col md:flex-row gap-8">
         {/* Left Side Panel */}
-        <div className="relative flex-1">
-          <div className="absolute -top-4 -left-4 w-full h-full bg-egypt-blue rounded-xl"></div>
-          <div className="relative bg-clear-sky rounded-xl p-6 shadow-lg z-10">
-            <img src={EndoSample} alt="Instruction" className="rounded-md mb-4" />
-            <p className="text-left text-base sm:text-lg">
-              Step-by-step guide to using EndoDetect effectively for your diagnosis workflow.
-            </p>
-          </div>
-        </div>
+      <div className="flex gap-8 p-8">
+        <div className="w-full md:w-1/3 bg-clear-sky rounded-2xl p-6 flex flex-col items-center shadow-lg">
+        <LeftPanelBox onSelect={setSelected} selected={selected} />
+      </div>
+      
         {/* Right Content */}
         <div className="flex-1 text-left flex flex-col justify-center">
           <h3 className="text-xl sm:text-2xl font-bold mb-4">How to Use</h3>
           <p className="text-base sm:text-lg">
-            Upload your endoscopic images, select the analysis mode, and receive AI-driven insights in seconds.
+                  To get the most out of the detection tool, simply follow the steps in order. 
+                  Start by uploading the applicable medical images, then run the AI-powered diagnosis.  
+                  Once completed, you can check the detailed results and available options, and finally browse through your saved results for future reference.
+                  Each step is designed to guide you smoothly through the process.     
           </p>
         </div>
+      </div>
+
+      <div>
+         {selectedItem && (
+          <img
+            src={selectedItem.img}
+            alt={selected}
+            className="max-w-md w-full rounded shadow mb-4 block"
+            onError={(e) => {
+              console.error("Image failed:", selectedItem.img);
+              e.currentTarget.alt = "Image failed to load";
+            }}
+          />
+        )}
+
+        {selectedItem && (
+          <p className="text-gray-700">{selectedItem.value}</p>
+        )}
+      </div>
       </section>
 
+
       {/* Footer */}
-      <footer className="bg-clear-sky py-8 text-center">
-        <div className="flex flex-col sm:flex-row justify-center gap-6 text-lg font-medium">
-          <Link to="/faq">FAQ</Link>
-          <Link to="/tos">Terms of Service</Link>
-          <Link to="/contact">Contact Us</Link>
-          <Link to="/about">About Us</Link>
-        </div>
-      </footer>
+     <footer/>
     </div>
   );
 }
