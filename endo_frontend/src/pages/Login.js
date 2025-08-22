@@ -1,62 +1,69 @@
 import React, { useState } from "react";
-import backgroundImage from "./image/bg2.avif";
-const Login = ({ onLogin }) => {
+
+export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    const success = onLogin(username, password);
-    if (!success) {
-      setError("Invalid username or password.");
-    } else {
-      setError("");
-    }
+    console.log("Username:", username);
+    console.log("Password:", password);
   };
 
   return (
-    <form className="login" onSubmit={handleSubmit}>
-      <h2>Login</h2>
+    <div
+      className="min-h-screen flex items-center justify-center bg-cover bg-center"
+      style={{ backgroundImage: "url('/images/background.jpg')" }} // ảnh đặt ở public/images/
+    >
+      <div className="bg-white shadow-lg rounded-2xl w-[90%] max-w-md p-8">
+        <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
 
-      {error && <p className="error-message">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Username */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Username</label>
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
 
-      <div className="input-group">
-        <label>Username</label>
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Enter username"
-        />
-      </div>
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2 text-sm text-gray-600 hover:text-gray-900"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
 
-      <div className="input-group">
-        <label>Password</label>
-        <div className="password-wrapper">
-          <input
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter password"
-          />
+          {/* Submit */}
           <button
-            type="button"
-            className="toggle-btn"
-            onClick={() => setShowPassword(!showPassword)}
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
           >
-            {showPassword ? "🙈" : "👁️"}
+            Login
           </button>
-        </div>
+        </form>
       </div>
-
-      <button type="submit" className="login-btn">
-        Login
-      </button>
-    </form>
+    </div>
   );
-};
-
-export default Login;
+}
