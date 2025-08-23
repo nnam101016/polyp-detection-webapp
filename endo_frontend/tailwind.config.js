@@ -1,5 +1,5 @@
-module.exports ={
-  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+module.exports = {
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       colors: {
@@ -8,9 +8,9 @@ module.exports ={
         'egypt-blue': '#0a369d',
       },
       backgroundImage: {
-        'homepage-banner': "url('/src/image/homepage_banner.jpg')",
+        'homepage-banner': "url('/homepage_banner.jpg')",
       },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/forms')], // optional but recommended
 };
