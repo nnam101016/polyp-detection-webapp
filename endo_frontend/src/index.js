@@ -8,6 +8,7 @@ import Analytics from "./pages/AnalyticsPage";
 import Login from "./pages/Login";
 import Profile from "./pages/ProfilePage";
 import HistoryPage from "./pages/HistoryPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 
 import TOS from "./pages/TOSPage";
 import About from "./pages/About";
@@ -39,6 +40,7 @@ root.render(
             <Route path="/feedback" element={<FeedbackForm />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/history" element={<HistoryPage />} />
+            <Route path="/admin" element={<AdminDashboardPage />} />
 
             <Route path="/terms" element={<TOS />} />
             <Route path="/about" element={<About />} />

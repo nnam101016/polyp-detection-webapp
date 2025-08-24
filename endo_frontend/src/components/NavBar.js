@@ -62,8 +62,12 @@ export default function NavBar() {
             <>
               <li><NavLink to="/profile" className="hover:text-select-yellow">Profile</NavLink></li>
               <li><NavLink to="/history" className="hover:text-select-yellow">History</NavLink></li>
+              {profile?.is_admin && (
+                <li><NavLink to="/admin" className="hover:text-select-yellow">Admin</NavLink></li>
+              )}
             </>
           )}
+
         </ul>
 
         <div className="flex items-center gap-4">

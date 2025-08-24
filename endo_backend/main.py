@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from jose import jwt, JWTError
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, constr
 from ultralytics import YOLO
 
 # ---- Torch / CV deps ----
@@ -55,9 +55,9 @@ UNET_INPUT_SIZE   = (256, 256)    # (W,H)
 UNET_THRESHOLD    = 0.75
 
 # Post-processing to suppress speckles
-UNET_MIN_AREA_PCT = 0.0005              # drop connected components smaller than 0.05% of image px
-UNET_MORPH_KERNEL = 3                   # 3x3 kernel for open/close; set 0 to disable
-UNET_SMOOTH_GAUSS = 1.0                 # gaussian sigma (in pixels) on the prob map; 0 to disable
+UNET_MIN_AREA_PCT = 0.0005
+UNET_MORPH_KERNEL = 3
+UNET_SMOOTH_GAUSS = 1.0
 
 TASK_DETECTION     = "detection"
 TASK_SEG_INSTANCE  = "segmentation_instance"
@@ -70,14 +70,11 @@ RESULT_SCHEMA_VERSION = 2
 # =========================
 
 AVAILABLE_MODELS = {
-    # YOLO detection (eager-load)
-    "default":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
-    # Segmentation (lazy)
+    "yolo":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
     "maskrcnn": {"task": TASK_SEG_INSTANCE, "model": None, "weights": MASKRCNN_WEIGHTS},
     "unet":     {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
 }
 
-# eval() for already-loaded models
 for k, v in AVAILABLE_MODELS.items():
     if v["model"] is not None and hasattr(v["model"], "eval"):
         v["model"].eval()
@@ -98,7 +95,7 @@ def load_unet(weights_path: str):
     if not _HAS_SMP:
         raise RuntimeError("segmentation_models_pytorch is not installed on the server.")
     model = smp.Unet(
-        encoder_name=UNET_ENCODER_NAME,   # match notebook
+        encoder_name=UNET_ENCODER_NAME,
         encoder_weights=None,
         in_channels=3,
         classes=1,
@@ -130,33 +127,22 @@ def _ensure_loaded(name: str):
 def draw_mask_overlay(
     rgb_np,
     mask_bin,
-    fill_color=(255, 0, 0),     # red
+    fill_color=(255, 0, 0),
     fill_alpha=0.7,
-    line_color=(0, 255, 255),   # cyan
+    line_color=(0, 255, 255),
     line_thickness=3,
     draw_centroid=True,
 ):
-    """
-    High-visibility overlay for segmentation masks:
-      - semi-transparent solid fill
-      - cyan contour outline
-      - optional centroid dot
-    rgb_np: HxWx3 uint8 (RGB)
-    mask_bin: HxW {0,1} or bool
-    """
     if mask_bin is None or mask_bin.sum() == 0:
         return rgb_np
 
     base = rgb_np.copy()
-
-    # filled overlay — broadcast via np.where (safe with HxWx1 mask)
     color_img = np.zeros_like(base, dtype=np.uint8)
     color_img[:] = np.array(fill_color, dtype=np.uint8)
     filled = cv2.addWeighted(base, 1.0 - fill_alpha, color_img, fill_alpha, 0)
     m3 = mask_bin.astype(bool)[..., None]
     base = np.where(m3, filled, base)
 
-    # outline (contours) + centroids
     cnts, _ = cv2.findContours(mask_bin.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if cnts:
         cv2.drawContours(base, cnts, -1, line_color, thickness=line_thickness, lineType=cv2.LINE_AA)
@@ -197,19 +183,11 @@ def build_summary(dets, img_w, img_h, timing_ms=None):
 # =========================
 
 def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH, mask_thresh: float = MASKRCNN_MASK_THRESH):
-    """
-    Mask R-CNN inference matching the notebook:
-      - resize input to 256x256
-      - keep instances with score >= 0.75
-      - binarize masks at 0.5
-      - resize masks back to original size for overlay/polygons/area
-    """
     img = pil_img.convert("RGB")
     orig_h, orig_w = img.height, img.width
 
-    # resize to (W,H) for the model (per notebook)
     resized = img.resize(MASKRCNN_INPUT_SIZE, Image.BILINEAR)
-    tensor = TF.to_tensor(resized)  # 3xHxW in [0,1]
+    tensor = TF.to_tensor(resized)
 
     t0 = time.time()
     with torch.no_grad():
@@ -225,18 +203,15 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
 
     if scores is not None and masks is not None:
         scores = scores.cpu().numpy()
-        masks  = masks.cpu().numpy()  # N x 1 x h x w  (here h,w = 256,256)
+        masks  = masks.cpu().numpy()
         labels = labels.cpu().numpy() if labels is not None else np.zeros_like(scores)
 
         keep = [i for i, s in enumerate(scores) if s >= float(score_thresh)]
         for i in keep:
-            # mask at model resolution
             m_small = masks[i, 0]
             m_bin_small = (m_small > float(mask_thresh)).astype(np.uint8)
 
-            # resize mask back to original image size
             m_up = cv2.resize(m_bin_small, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-
             if m_up.sum() == 0:
                 continue
 
@@ -253,7 +228,6 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
                 "mask_polygons": polys
             })
 
-    # High-visibility overlay (red fill + cyan outline)
     overlay = draw_mask_overlay(np.array(img), union_mask,
                                 fill_color=(255, 0, 0),
                                 fill_alpha=0.7,
@@ -271,35 +245,25 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
 
 
 def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
-    """
-    Robust U-Net inference:
-     - optional resize to training size
-     - encoder mean/std normalization (SMP params)
-     - binary (sigmoid) or multi-class (softmax) support
-     - gaussian smoothing, morphology open/close
-     - min-area filtering to remove sparkle detections
-    """
     if thresh is None:
         thresh = UNET_THRESHOLD
 
     img = pil_img.convert("RGB")
     H, W = img.height, img.width
-    rgb = np.array(img)  # H x W x 3, uint8
+    rgb = np.array(img)
 
-    # --- optional resize to training size ---
     if UNET_INPUT_SIZE:
         resized = cv2.resize(rgb, UNET_INPUT_SIZE, interpolation=cv2.INTER_LINEAR)
     else:
         resized = rgb
 
-    # --- SMP encoder normalization ---
     params = smp.encoders.get_preprocessing_params(UNET_ENCODER_NAME)
     mean = np.array(params["mean"], dtype=np.float32)
     std  = np.array(params["std"], dtype=np.float32)
 
     x = resized.astype(np.float32) / 255.0
     x = (x - mean) / std
-    x = np.transpose(x, (2, 0, 1))[None, ...]     # 1x3xHxW
+    x = np.transpose(x, (2, 0, 1))[None, ...]
     x_t = torch.from_numpy(x)
 
     t0 = time.time()
@@ -307,35 +271,28 @@ def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
         out = model(x_t)
         if isinstance(out, (list, tuple)):
             out = out[0]
-
-        # Handle binary vs multi-class heads:
-        if out.shape[1] == 1:                     # binary
+        if out.shape[1] == 1:
             probs_small = torch.sigmoid(out)[0, 0].cpu().numpy()
-        else:                                     # multi-class
-            probs_all = torch.softmax(out, dim=1)[0].cpu().numpy()  # CxHxW
-            probs_small = probs_all[class_idx]     # choose the polyp class
+        else:
+            probs_all = torch.softmax(out, dim=1)[0].cpu().numpy()
+            probs_small = probs_all[class_idx]
     infer_ms = {"inference": (time.time() - t0) * 1000.0}
 
-    # --- resize back to original size ---
     if UNET_INPUT_SIZE and (resized.shape[0] != H or resized.shape[1] != W):
         probs = cv2.resize(probs_small, (W, H), interpolation=cv2.INTER_LINEAR)
     else:
         probs = probs_small
 
-    # --- optional smoothing ---
     if UNET_SMOOTH_GAUSS and UNET_SMOOTH_GAUSS > 0:
         probs = cv2.GaussianBlur(probs, ksize=(0, 0), sigmaX=UNET_SMOOTH_GAUSS)
 
-    # --- threshold to binary mask ---
     mask_bin = (probs >= float(thresh)).astype(np.uint8)
 
-    # --- optional morphology to remove speckles & close tiny holes ---
     if UNET_MORPH_KERNEL and UNET_MORPH_KERNEL >= 3:
         k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (UNET_MORPH_KERNEL, UNET_MORPH_KERNEL))
         mask_bin = cv2.morphologyEx(mask_bin, cv2.MORPH_OPEN,  k, iterations=1)
         mask_bin = cv2.morphologyEx(mask_bin, cv2.MORPH_CLOSE, k, iterations=1)
 
-    # Connected components => per-region detections (with min-area filter)
     num, labels_cc = cv2.connectedComponents(mask_bin, connectivity=4)
     dets = []
     min_area = int(UNET_MIN_AREA_PCT * (H * W))
@@ -358,7 +315,6 @@ def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
             "mask_polygons": polys
         })
 
-    # Overlay (bright green fill + cyan outline)
     overlay = draw_mask_overlay(np.array(img), mask_bin,
                                 fill_color=(0, 200, 0),
                                 fill_alpha=0.7,
@@ -377,7 +333,6 @@ def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
 
 
 def yolo_result_to_dict(res, names: dict):
-    """Standardized result for YOLO detection (and YOLO-seg if masks present)."""
     dets = []
     img_h, img_w = res.orig_shape if getattr(res, "orig_shape", None) else (-1, -1)
 
@@ -410,7 +365,6 @@ def yolo_result_to_dict(res, names: dict):
                 "aspect_ratio": round(w / h, 4) if h > 0 else None
             })
 
-    # If YOLO-seg, include masks per detection
     if getattr(res, "masks", None) is not None and res.masks is not None and len(dets) == len(res.masks):
         masks = res.masks.data.cpu().numpy()
         for i in range(len(dets)):
@@ -436,7 +390,6 @@ def yolo_result_to_dict(res, names: dict):
 # FastAPI app + auth/db
 # ======================
 
-# MongoDB connection
 load_dotenv()
 MONGODB_URI = os.environ.get("MONGODB_URI")
 if not MONGODB_URI:
@@ -446,11 +399,9 @@ db = client["polyp_detection"]
 scans_collection = db["scans"]
 users_collection = db["users"]
 
-# FASTAPI initialization
 app = FastAPI()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -461,17 +412,15 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  # includes content-type, authorization
+    allow_headers=["*"],
 )
 
-# Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-# JWT
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev_local_secret_change_me")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -481,7 +430,6 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# Schemas
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -497,10 +445,14 @@ class UserUpdate(BaseModel):
     occupation: str = ""
     phone: str = ""
 
+# NEW: admin create-user schema
+class AdminCreateUser(BaseModel):
+    email: EmailStr
+    password: constr(min_length=6)
+    name: str | None = None
+    is_admin: bool = False
 
-# ===============
-# Auth Endpoints
-# ===============
+
 @app.post("/register")
 async def register(user: UserCreate):
     existing = await users_collection.find_one({"email": user.email})
@@ -553,6 +505,9 @@ async def admin_required(current_user: dict = Depends(get_current_user)):
     if not current_user.get("is_admin", False):
         raise HTTPException(status_code=403, detail="Admin access only.")
     return current_user
+
+# alias used below
+require_admin = admin_required
 
 
 # ====================
@@ -608,7 +563,7 @@ async def upload(
     patient_name: str = Form(...),
     patient_id: str = Form(...),
     notes: str = Form(""),
-    model_name: str = Form("default"),
+    model_name: str = Form("yolo"),
     current_user: dict = Depends(get_current_user)
 ):
     if model_name not in AVAILABLE_MODELS:
@@ -624,16 +579,14 @@ async def upload(
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
         image_bytes = await file.read()
 
-        # original upload
         s3_url = s3.upload_to_s3(io.BytesIO(image_bytes), unique_filename)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        # --- Predict based on task ---
         if task == TASK_DETECTION:
             preds = model.predict(image, verbose=False)
             res = preds[0]
             result_dict = yolo_result_to_dict(res, model.names)
-            rendered = res.plot()  # ndarray
+            rendered = res.plot()
             processed_img = Image.fromarray(rendered)
 
         elif task == TASK_SEG_INSTANCE:
@@ -647,16 +600,13 @@ async def upload(
         else:
             raise HTTPException(status_code=500, detail=f"Unsupported task: {task}")
 
-        # annotate result with model_name
         result_dict["result_meta"]["model_name"] = model_name
 
-        # upload processed image
         buffer = io.BytesIO()
         processed_img.save(buffer, format="JPEG")
         buffer.seek(0)
         processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
 
-        # persist
         doc = {
             "user_id": str(current_user["_id"]),
             "user_email": current_user["email"],
@@ -702,13 +652,11 @@ async def promote_user(user_id: str, current_user: dict = Depends(admin_required
     result = await users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": {"is_admin": True}})
     return {"modified_count": result.modified_count}
 
-
 @app.get("/admin/stats")
 async def get_admin_stats(current_user: dict = Depends(admin_required)):
     total_users = await users_collection.count_documents({})
     total_uploads = await scans_collection.count_documents({})
     return {"total_users": total_users, "total_uploads": total_uploads}
-
 
 @app.get("/admin/users")
 async def get_all_users(current_user: dict = Depends(admin_required)):
@@ -719,13 +667,37 @@ async def get_all_users(current_user: dict = Depends(admin_required)):
         users.append(user)
     return users
 
+# NEW: create user (admin only)
+@app.post("/admin/users", status_code=201)
+async def admin_create_user(payload: AdminCreateUser, _admin=Depends(require_admin)):
+    existing = await users_collection.find_one({"email": payload.email})
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already exists")
+
+    hashed = hash_password(payload.password)
+    doc = {
+        "email": payload.email,
+        "hashed_password": hashed,
+        "name": payload.name or "",
+        "is_admin": payload.is_admin,
+        "created_at": datetime.utcnow(),
+    }
+    await users_collection.insert_one(doc)
+    return {
+        "message": "User created",
+        "user": {
+            "email": doc["email"],
+            "name": doc["name"],
+            "is_admin": doc["is_admin"],
+            "created_at": doc["created_at"],
+        },
+    }
 
 @app.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(admin_required)):
     from bson import ObjectId
     result = await users_collection.delete_one({"_id": ObjectId(user_id)})
     return {"deleted_count": result.deleted_count}
-
 
 @app.get("/admin/uploads")
 async def get_all_uploads(current_user: dict = Depends(admin_required)):
@@ -735,7 +707,6 @@ async def get_all_uploads(current_user: dict = Depends(admin_required)):
         upload["_id"] = str(upload["_id"])
         uploads.append(upload)
     return uploads
-
 
 @app.delete("/admin/uploads/{upload_id}")
 async def delete_upload(upload_id: str, current_user: dict = Depends(admin_required)):

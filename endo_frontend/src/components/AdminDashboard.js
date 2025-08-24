@@ -1,3 +1,4 @@
+// src/components/AdminDashboard.js
 import React, { useEffect, useState } from "react";
 import API from "../api";
 
@@ -6,6 +7,13 @@ const AdminDashboard = () => {
   const [uploads, setUploads] = useState([]);
   const [stats, setStats] = useState({ total_users: 0, total_uploads: 0 });
   const [search, setSearch] = useState("");
+
+  // --- Create User (new) ---
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newIsAdmin, setNewIsAdmin] = useState(false);
+  const [createMsg, setCreateMsg] = useState("");
 
   useEffect(() => {
     fetchUsers();
@@ -69,9 +77,31 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setCreateMsg("");
+    try {
+      await API.post("/admin/users", {
+        email: newEmail,
+        password: newPassword,
+        name: newName,
+        is_admin: newIsAdmin,
+      });
+      setCreateMsg("✅ User created");
+      setNewEmail("");
+      setNewPassword("");
+      setNewName("");
+      setNewIsAdmin(false);
+      fetchUsers();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || "Failed to create user";
+      setCreateMsg(`❌ ${msg}`);
+    }
+  };
+
   const filteredUploads = uploads.filter((u) =>
-    u.patient_name.toLowerCase().includes(search.toLowerCase()) ||
-    u.user_email?.toLowerCase().includes(search.toLowerCase())
+    (u.patient_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (u.user_email || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -79,7 +109,7 @@ const AdminDashboard = () => {
       <h2 className="text-2xl font-semibold mb-4 text-blue-600">Admin Dashboard</h2>
 
       {/* Stats */}
-      <div className="flex space-x-4 mb-6">
+      <div className="flex flex-wrap gap-4 mb-6">
         <div className="bg-white shadow rounded px-4 py-3">
           <p className="font-semibold">Total Users</p>
           <p>{stats.total_users}</p>
@@ -88,6 +118,54 @@ const AdminDashboard = () => {
           <p className="font-semibold">Total Uploads</p>
           <p>{stats.total_uploads}</p>
         </div>
+      </div>
+
+      {/* Create User (NEW) */}
+      <div className="mb-8 bg-white shadow rounded p-4">
+        <h3 className="text-lg font-semibold mb-3">Create New User</h3>
+        <form
+          className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
+          onSubmit={handleCreateUser}
+        >
+          <input
+            type="text"
+            className="border p-2 rounded"
+            placeholder="Name (optional)"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <input
+            type="email"
+            className="border p-2 rounded"
+            placeholder="Email"
+            required
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+          />
+          <input
+            type="password"
+            className="border p-2 rounded"
+            placeholder="Password (min 6)"
+            required
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={newIsAdmin}
+              onChange={(e) => setNewIsAdmin(e.target.checked)}
+            />
+            <span>Is Admin</span>
+          </label>
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Create
+          </button>
+        </form>
+        {createMsg && <p className="mt-2 text-sm">{createMsg}</p>}
       </div>
 
       {/* Users Table */}
@@ -108,19 +186,32 @@ const AdminDashboard = () => {
                 <tr key={u._id}>
                   <td className="p-2 border">{u.email}</td>
                   <td className="p-2 border">{u.is_admin ? "Yes" : "No"}</td>
-                  <td className="p-2 border">{new Date(u.created_at).toLocaleString()}</td>
+                  <td className="p-2 border">
+                    {u.created_at ? new Date(u.created_at).toLocaleString() : "-"}
+                  </td>
                   <td className="p-2 border space-x-2">
                     {!u.is_admin && (
-                      <button onClick={() => promoteUser(u._id)} className="text-blue-600 hover:underline">
+                      <button
+                        onClick={() => promoteUser(u._id)}
+                        className="text-blue-600 hover:underline"
+                      >
                         Promote
                       </button>
                     )}
-                    <button onClick={() => deleteUser(u._id)} className="text-red-600 hover:underline">
+                    <button
+                      onClick={() => deleteUser(u._id)}
+                      className="text-red-600 hover:underline"
+                    >
                       Delete
                     </button>
                   </td>
                 </tr>
               ))}
+              {users.length === 0 && (
+                <tr>
+                  <td className="p-3 text-center border" colSpan={4}>No users</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -152,7 +243,9 @@ const AdminDashboard = () => {
                 <tr key={u._id}>
                   <td className="p-2 border">{u.patient_name}</td>
                   <td className="p-2 border">{u.user_email || ""}</td>
-                  <td className="p-2 border">{new Date(u.datetime).toLocaleString()}</td>
+                  <td className="p-2 border">
+                    {u.datetime ? new Date(u.datetime).toLocaleString() : "-"}
+                  </td>
                   <td className="p-2 border">
                     {u.processed_s3_url ? (
                       <a
@@ -168,12 +261,20 @@ const AdminDashboard = () => {
                     )}
                   </td>
                   <td className="p-2 border">
-                    <button onClick={() => deleteUpload(u._id)} className="text-red-600 hover:underline">
+                    <button
+                      onClick={() => deleteUpload(u._id)}
+                      className="text-red-600 hover:underline"
+                    >
                       Delete
                     </button>
                   </td>
                 </tr>
               ))}
+              {filteredUploads.length === 0 && (
+                <tr>
+                  <td className="p-3 text-center border" colSpan={5}>No uploads</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
