@@ -72,9 +72,6 @@ RESULT_SCHEMA_VERSION = 2
 AVAILABLE_MODELS = {
     # YOLO detection (eager-load)
     "default":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
-    "fast":         {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
-    "accurate":     {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
-    "experimental": {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
     # Segmentation (lazy)
     "maskrcnn": {"task": TASK_SEG_INSTANCE, "model": None, "weights": MASKRCNN_WEIGHTS},
     "unet":     {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
