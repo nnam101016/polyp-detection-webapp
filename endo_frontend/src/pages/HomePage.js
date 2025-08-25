@@ -3,6 +3,7 @@ import {Link} from "react-router-dom"
 import banner from '../image/home_banner.jpg';
 import LeftPanelBox, { navItems } from "../components/LeftPanelBox";
 import { useState } from "react";
+import Footer from "../components/Footer";
 
 import image from "../image/why detect.png";
 import sam1 from "../image/bg2.avif"
@@ -21,15 +22,15 @@ function HomePage(){
 
     const selectedItem = navItems.find((i) => i.label === selected) || null;
     return (
-        <div className="h-full w-full flex flex-col items-center gap-64">
-            <div className="flex justify-center items-center flex-row">
+        <div className="h-full w-full flex flex-col items-center gap-32 bg-white">
+            <div id="quick-start" className="flex justify-center items-center flex-row">
                 <img src={banner} alt="Endoscopic Homepage Banner" className="w-1/3 my-5"/>
 
                 <div className="flex flex-col justify-center items-start w-1/3">
-                    <h1 className="text-3xl text-egypt-blue flex-wrap">
+                    <h1 className="text-4xl text-egypt-blue flex-wrap font-bold">
                         EndoDetect: Lesion Detection in Endoscopic Images using Deep Learning
                     </h1>
-                    <p className="w-full text-lg flex-wrap mt-2 mb-10 text-select-yellow">
+                    <p className="w-full text-xl flex-wrap mt-2 mb-10 text-select-yellow">
                         Upload your images and let our advanced AI help you detect potential polyps with high accuracy.
                     </p>
                     <div className="flex w-full justify-center items-center flex-row gap-6">
@@ -68,13 +69,14 @@ function HomePage(){
                 </div>
         </section>
 
-        <div className="w-3/4">
+        <div id="model" className="w-3/4 flex flex-col items-center">
+            <h1 className="text-3xl text-egypt-blue font-bold">Models Comparision</h1>
             <CarouselWithText cards={cards}/>
         </div>
             
 
             {/* Left Panel Instructions */}
-        <section className="w-full flex flex-col md:flex-row items-center justify-center">
+        <section id="steps" className="w-full flex flex-col md:flex-row items-center justify-center">
             <div  className="w-3/4 flex flex-col items-center">
                 <h1 className="text-xl sm:text-2xl font-bold mb-4">How to Use</h1>
                 <div className=" flex flex-row gap-6 p-10 ">
@@ -102,6 +104,10 @@ function HomePage(){
                 
             </div>
         </section>
+
+        
+        {/* Footer stays at the bottom */}
+        <Footer/>
         </div>
     );
 }

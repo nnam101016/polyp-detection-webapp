@@ -11,7 +11,7 @@
     /* custom bits via theme()/plain CSS */
     background-color: theme('colors.egypt-blue');
     color: theme('colors.clear-sky');
-    height: 12vh; /* instead of @apply h-[12vh] */
+    height: 30vh; /* instead of @apply h-[12vh] */
   }
 
   .button-enlarge {
