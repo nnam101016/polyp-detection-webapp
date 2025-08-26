@@ -13,7 +13,7 @@ export default function DiagnosisPage() {
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [uploadResults, setUploadResults] = useState([]);
-  const [model, setModel] = useState("yolo");
+  const [model, setModel] = useState("yolo_9t");
 
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files).slice(0, 10); // max 10
@@ -64,7 +64,8 @@ export default function DiagnosisPage() {
               onChange={(e) => setModel(e.target.value)}
               className="border p-2 w-full"
             >
-              <option value="yolo">YOLO (detection)</option>
+              <option value="yolo_9t">YOLO 9t (detection)</option>
+              <option value="yolo_11n">YOLO 11n (detection)</option>
               <option value="maskrcnn">Mask R‑CNN (segmentation)</option>
               <option value="unet">U‑Net (segmentation)</option>
             </select>

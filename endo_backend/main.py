@@ -6,6 +6,8 @@ import io
 import os
 import uuid
 import time
+from datetime import datetime, timezone, timedelta
+
 
 import numpy as np
 from PIL import Image
@@ -40,7 +42,8 @@ import s3  # your existing S3 helper
 # Config: weights & params
 # =========================
 
-YOLO_WEIGHTS = "./model/best_new.pt"
+YOLO_WEIGHTS_9T = "./model/yolo_9t.pt"
+YOLO_WEIGHTS_11N = "./model/yolo_11n.pt"
 
 # Mask R-CNN (torchvision)
 MASKRCNN_WEIGHTS = "./model/maskrcnn_best.pth"
@@ -64,13 +67,20 @@ TASK_SEG_INSTANCE  = "segmentation_instance"
 TASK_SEG_SEMANTIC  = "segmentation_semantic"
 RESULT_SCHEMA_VERSION = 2
 
+# Datetime UTC+7
+TZ_UTC7 = timezone(timedelta(hours=7))
+
+def now_utc7():
+    return datetime.now(TZ_UTC7)
+
 
 # =========================
 # Model registry (lazy)
 # =========================
 
 AVAILABLE_MODELS = {
-    "yolo":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS)},
+    "yolo_9t":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_9T)},
+    "yolo_11n":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_11N)},
     "maskrcnn": {"task": TASK_SEG_INSTANCE, "model": None, "weights": MASKRCNN_WEIGHTS},
     "unet":     {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
 }
@@ -127,9 +137,9 @@ def _ensure_loaded(name: str):
 def draw_mask_overlay(
     rgb_np,
     mask_bin,
-    fill_color=(255, 0, 0),
-    fill_alpha=0.7,
-    line_color=(0, 255, 255),
+    fill_color=(0, 222, 255),
+    fill_alpha=0.35,
+    line_color=(0, 222, 255),
     line_thickness=3,
     draw_centroid=True,
 ):
@@ -228,11 +238,7 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
                 "mask_polygons": polys
             })
 
-    overlay = draw_mask_overlay(np.array(img), union_mask,
-                                fill_color=(255, 0, 0),
-                                fill_alpha=0.7,
-                                line_color=(0, 255, 255),
-                                line_thickness=3)
+    overlay = draw_mask_overlay(np.array(img), union_mask)
 
     summary = build_summary(dets, orig_w, orig_h, timing_ms=infer_ms)
     result = {
@@ -315,11 +321,7 @@ def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
             "mask_polygons": polys
         })
 
-    overlay = draw_mask_overlay(np.array(img), mask_bin,
-                                fill_color=(0, 200, 0),
-                                fill_alpha=0.7,
-                                line_color=(0, 255, 255),
-                                line_thickness=3)
+    overlay = draw_mask_overlay(np.array(img), mask_bin)
 
     summary = build_summary(dets, W, H, timing_ms=infer_ms)
     result = {
@@ -539,19 +541,26 @@ async def read_profile(current_user: dict = Depends(get_current_user)):
 # ==================
 @app.get("/history")
 async def get_upload_history(current_user: dict = Depends(get_current_user)):
-    uploads = scans_collection.find({"user_id": str(current_user["_id"])})
-    results = []
-    async for upload in uploads:
-        results.append({
-            "patient_name": upload["patient_name"],
-            "patient_id": upload["patient_id"],
-            "datetime": upload["datetime"],
-            "s3_url": upload["s3_url"],
-            "processed_s3_url": upload["processed_s3_url"],
-            "result": upload["result"],
-            "notes": upload["notes"]
-        })
-    return results
+    cursor = (
+        scans_collection
+        .find({"user_id": str(current_user["_id"])})
+        .sort("datetime", -1)  # newest → oldest
+    )
+
+    docs = await cursor.to_list(length=1000)  # or any sensible limit
+
+    return [
+        {
+            "patient_name": d.get("patient_name"),
+            "patient_id": d.get("patient_id"),
+            "datetime": d.get("datetime"),
+            "s3_url": d.get("s3_url"),
+            "processed_s3_url": d.get("processed_s3_url"),
+            "result": d.get("result"),
+            "notes": d.get("notes"),
+        }
+        for d in docs
+    ]
 
 
 # ==============================
@@ -563,7 +572,7 @@ async def upload(
     patient_name: str = Form(...),
     patient_id: str = Form(...),
     notes: str = Form(""),
-    model_name: str = Form("yolo"),
+    model_name: str = Form("yolo_9t"),
     current_user: dict = Depends(get_current_user)
 ):
     if model_name not in AVAILABLE_MODELS:
@@ -583,11 +592,13 @@ async def upload(
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         if task == TASK_DETECTION:
-            preds = model.predict(image, verbose=False, iou = 0.3)
+            preds = model.predict(image, verbose=False, iou=0.3)
             res = preds[0]
             result_dict = yolo_result_to_dict(res, model.names)
-            rendered = res.plot()
-            processed_img = Image.fromarray(rendered)
+            # res.plot() returns BGR; convert to RGB so colors are correct
+            rendered_bgr = res.plot()
+            rendered_rgb = cv2.cvtColor(rendered_bgr, cv2.COLOR_BGR2RGB)
+            processed_img = Image.fromarray(rendered_rgb)
 
         elif task == TASK_SEG_INSTANCE:
             overlay_np, result_dict = predict_maskrcnn(model, image)
@@ -607,12 +618,14 @@ async def upload(
         buffer.seek(0)
         processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
 
+        now = datetime.now(TZ_UTC7)
+
         doc = {
             "user_id": str(current_user["_id"]),
             "user_email": current_user["email"],
             "patient_name": patient_name,
             "patient_id": patient_id,
-            "datetime": datetime.utcnow().isoformat(),
+            "datetime":  now.isoformat(timespec="seconds"),
             "filename": unique_filename,
             "s3_url": s3_url,
             "processed_s3_url": processed_s3_url,

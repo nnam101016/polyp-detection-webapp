@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import API from "../api";
 
 export default function NavBar() {
   const [profile, setProfile] = useState(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const loadProfile = async () => {
     const token = localStorage.getItem("token");
@@ -42,6 +43,7 @@ export default function NavBar() {
     localStorage.removeItem("user_name");
     setProfile(null);
     window.dispatchEvent(new Event("auth-changed"));
+    navigate("/", { replace: true }); // redirect to homepage
   };
 
   const displayName = profile?.name || profile?.email || localStorage.getItem("user_name");
@@ -50,7 +52,7 @@ export default function NavBar() {
     <header className="bg-egypt-blue text-white">
       <nav className="container mx-auto h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl">
-          <img src="/logo192.png" alt="logo" className="h-8" />
+          <img src="/favicon2.png" alt="logo" className="h-8" />
           EndoDetect
         </Link>
 
@@ -60,7 +62,7 @@ export default function NavBar() {
           {displayName && (
             <>
               <li><NavLink to="/diagnosis" className="hover:text-select-yellow">Diagnostic</NavLink></li>
-              <li><NavLink to="/analytic"  className="hover:text-select-yellow">Analytics</NavLink></li>
+              {/* <li><NavLink to="/analytic"  className="hover:text-select-yellow">Analytics</NavLink></li> */}
               <li><NavLink to="/profile" className="hover:text-select-yellow">Profile</NavLink></li>
               <li><NavLink to="/history" className="hover:text-select-yellow">History</NavLink></li>
               {profile?.is_admin && (

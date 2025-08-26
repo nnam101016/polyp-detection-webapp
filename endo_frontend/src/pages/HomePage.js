@@ -7,14 +7,14 @@ import Footer from "../components/Footer";
 import { useNavigate } from "react-router-dom";
 
 import image from "../image/why detect.png";
-import sam1 from "../image/bg2.avif"
-import sam2 from "../image/bg1.avif"
-import sam3 from "../image/login_banner.jpg"
+import sam1 from "../image/original.jpg"
+import sam2 from "../image/overlay.jpg"
+import sam3 from "../image/boundingbox.png"
 
 const cards = [
-    {id: 1, src: sam1, text: "This is input"}, 
-    {id: 2, src: sam2, text: "This is detectation"}, 
-    {id: 3, src: sam3, text: "This is segmentation"},  
+    {id: 1, src: sam1, text: "Original Input Image"}, 
+    {id: 2, src: sam2, text: "Segmentation With Overlay (Mask RCNN)"}, 
+    {id: 3, src: sam3, text: "Detection With Bounding Box (YOLO 9t)"},  
 ]
 
 function HomePage(){
@@ -78,7 +78,7 @@ function HomePage(){
         </section>
 
         <div id="model" className="w-3/4 flex flex-col items-center">
-            <h1 className="text-3xl text-egypt-blue font-bold">Models Comparision</h1>
+            <h1 className="text-3xl text-egypt-blue font-bold">Our Products</h1>
             <CarouselWithText cards={cards}/>
         </div>
             
