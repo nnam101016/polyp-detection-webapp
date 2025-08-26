@@ -4,6 +4,7 @@ import banner from '../image/home_banner.jpg';
 import LeftPanelBox, { navItems } from "../components/LeftPanelBox";
 import { useState } from "react";
 import Footer from "../components/Footer";
+import { useNavigate } from "react-router-dom";
 
 import image from "../image/why detect.png";
 import sam1 from "../image/bg2.avif"
@@ -17,6 +18,16 @@ const cards = [
 ]
 
 function HomePage(){
+    const navigate = useNavigate();
+
+    const handleStartDiagnosis = () => {
+    const token = localStorage.getItem("token");
+    if (token) {
+        navigate("/diagnosis");
+    } else {
+        navigate("/login");
+    }
+    };
 
     const [selected, setSelected] = useState("step1", "step2", "step3", "step4", "step5");
 
@@ -34,18 +45,15 @@ function HomePage(){
                         Upload your images and let our advanced AI help you detect potential polyps with high accuracy.
                     </p>
                     <div className="flex w-full justify-center items-center flex-row gap-6">
-                        <Link to="diagnosis">
-                            <button className="button-border">
-                                Start Diagnosis
-                            </button>
-                        </Link>
+                        <button onClick={handleStartDiagnosis} className="button-border">
+                            Start Diagnosis
+                        </button>
                         <Link to="faq">
                             <button className="button-border">
                                 Learn More Here
                             </button>
                         </Link>
                     </div>
-                    
                 </div>
             </div>
 
