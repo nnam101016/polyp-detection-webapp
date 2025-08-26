@@ -47,21 +47,21 @@ export default function NavBar() {
   const displayName = profile?.name || profile?.email || localStorage.getItem("user_name");
 
   return (
-    <header className="bg-egypt-blue text-white">
-      <nav className="container mx-auto h-16 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-bold text-xl">
+    <header id="nav" className="bg-egypt-blue text-white">
+      <nav className="container md:h-16 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2 font-bold text-3xl">
           <img src="/logo192.png" alt="logo" className="h-8" />
           EndoDetect
         </Link>
 
-        <ul className="flex gap-6 items-center">
+        <ul className="flex gap-6 items-center text-lg ml-auto mr-8">
           <li><NavLink to="/diagnosis" className="hover:text-select-yellow">Diagnostic</NavLink></li>
           <li><NavLink to="/analytic"  className="hover:text-select-yellow">Analytic</NavLink></li>
-          <li><NavLink to="/feedback"  className="hover:text-select-yellow">Feedback</NavLink></li>
+          
           {displayName && (
             <>
-              <li><NavLink to="/profile" className="hover:text-select-yellow">Profile</NavLink></li>
-              <li><NavLink to="/history" className="hover:text-select-yellow">History</NavLink></li>
+              <li><NavLink to="/profile" className="hover:text-select-yellow mr-8">Profile</NavLink></li>
+              <li><NavLink to="/history" className="hover:text-select-yellow mr-8">History</NavLink></li>
               {profile?.is_admin && (
                 <li><NavLink to="/admin" className="hover:text-select-yellow">Admin</NavLink></li>
               )}
@@ -70,7 +70,7 @@ export default function NavBar() {
 
         </ul>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center mr-8 text-lg">
           {displayName ? (
             <>
               <span className="text-select-yellow font-semibold">Hello {displayName}</span>

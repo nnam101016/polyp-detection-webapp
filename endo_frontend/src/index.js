@@ -18,7 +18,6 @@ import FAQPage from "./pages/FAQPage";
 import FeedbackForm from "./pages/FeedbackForm";
 
 import NavBar from "./components/NavBar";
-import Footer from "./components/Footer";
 
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
@@ -29,7 +28,6 @@ root.render(
       {/* Sticky footer layout */}
       <div className="min-h-screen flex flex-col">
         <NavBar />
-
         {/* Page content grows to fill leftover space */}
         <main className="flex-1">
           <Routes>
@@ -42,6 +40,7 @@ root.render(
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/admin" element={<AdminDashboardPage />} />
 
+            
             <Route path="/terms" element={<TOS />} />
             <Route path="/about" element={<About />} />
             <Route path="/faq" element={<FAQPage />} />
@@ -50,8 +49,6 @@ root.render(
           </Routes>
         </main>
 
-        {/* Footer stays at the bottom */}
-        <Footer />
       </div>
     </Router>
   </React.StrictMode>
