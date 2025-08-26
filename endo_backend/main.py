@@ -583,7 +583,7 @@ async def upload(
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         if task == TASK_DETECTION:
-            preds = model.predict(image, verbose=False)
+            preds = model.predict(image, verbose=False, iou = 0.3)
             res = preds[0]
             result_dict = yolo_result_to_dict(res, model.names)
             rendered = res.plot()
