@@ -16,8 +16,6 @@ export default function AdminDashboardPage() {
         const res = await API.get("/profile");
         const p = res.data;
         setProfile(p);
-
-        // hard gate: non-admins get redirected away
         if (!p?.is_admin) {
           navigate("/", { replace: true, state: { forbidden: true } });
         }
@@ -32,7 +30,7 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="w-full bg-gray-100">
+      <div className="w-full">
         <div className="min-h-[70vh] max-w-5xl mx-auto px-4 py-12 flex items-center justify-center">
           <div className="text-gray-600">Loading admin data…</div>
         </div>
@@ -42,7 +40,7 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="w-full bg-gray-100">
+      <div className="w-full">
         <div className="min-h-[70vh] max-w-5xl mx-auto px-4 py-12 flex items-center justify-center">
           <div className="text-red-600">{error}</div>
         </div>
@@ -50,12 +48,10 @@ export default function AdminDashboardPage() {
     );
   }
 
-  // If we already redirected a non-admin, render nothing
   if (!profile?.is_admin) return null;
 
-  // Admin-only content
   return (
-    <div className="w-full bg-gray-100">
+    <div className="w-full">
       <div className="min-h-[70vh] max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6 text-center">Admin Dashboard</h1>
         <AdminDashboard user={profile} />

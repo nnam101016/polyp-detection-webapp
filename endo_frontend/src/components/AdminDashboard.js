@@ -8,7 +8,7 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState({ total_users: 0, total_uploads: 0 });
   const [search, setSearch] = useState("");
 
-  // --- Create User (new) ---
+  // --- Create User (existing behavior) ---
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
@@ -105,38 +105,36 @@ const AdminDashboard = () => {
   );
 
   return (
-    <div className="p-6 w-full max-w-6xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-4 text-blue-600">Admin Dashboard</h2>
-
+    <div className="p-6 w-full max-w-7xl mx-auto">
       {/* Stats */}
-      <div className="flex flex-wrap gap-4 mb-6">
-        <div className="bg-white shadow rounded px-4 py-3">
-          <p className="font-semibold">Total Users</p>
-          <p>{stats.total_users}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white shadow rounded-xl px-4 py-3">
+          <p className="font-semibold text-gray-700">Total Users</p>
+          <p className="text-2xl font-bold">{stats.total_users}</p>
         </div>
-        <div className="bg-white shadow rounded px-4 py-3">
-          <p className="font-semibold">Total Uploads</p>
-          <p>{stats.total_uploads}</p>
+        <div className="bg-white shadow rounded-xl px-4 py-3">
+          <p className="font-semibold text-gray-700">Total Uploads</p>
+          <p className="text-2xl font-bold">{stats.total_uploads}</p>
         </div>
       </div>
 
-      {/* Create User (NEW) */}
-      <div className="mb-8 bg-white shadow rounded p-4">
-        <h3 className="text-lg font-semibold mb-3">Create New User</h3>
+      {/* Create User */}
+      <div className="mb-8 bg-white shadow rounded-xl p-4">
+        <h3 className="text-lg font-semibold mb-3 text-blue-600">Create New User</h3>
         <form
           className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
           onSubmit={handleCreateUser}
         >
           <input
             type="text"
-            className="border p-2 rounded"
+            className="border p-2 rounded-lg"
             placeholder="Name (optional)"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
           <input
             type="email"
-            className="border p-2 rounded"
+            className="border p-2 rounded-lg"
             placeholder="Email"
             required
             value={newEmail}
@@ -144,7 +142,7 @@ const AdminDashboard = () => {
           />
           <input
             type="password"
-            className="border p-2 rounded"
+            className="border p-2 rounded-lg"
             placeholder="Password (min 6)"
             required
             value={newPassword}
@@ -160,7 +158,7 @@ const AdminDashboard = () => {
           </label>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
           >
             Create
           </button>
@@ -172,8 +170,8 @@ const AdminDashboard = () => {
       <div className="mb-10">
         <h3 className="text-xl font-semibold mb-2">All Users</h3>
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white shadow rounded">
-            <thead>
+          <table className="min-w-full bg-white shadow rounded-xl">
+            <thead className="sticky top-0 bg-gray-50">
               <tr>
                 <th className="p-2 text-left border">Email</th>
                 <th className="p-2 text-left border">Is Admin</th>
@@ -183,13 +181,13 @@ const AdminDashboard = () => {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u._id}>
+                <tr key={u._id} className="hover:bg-gray-50">
                   <td className="p-2 border">{u.email}</td>
                   <td className="p-2 border">{u.is_admin ? "Yes" : "No"}</td>
                   <td className="p-2 border">
                     {u.created_at ? new Date(u.created_at).toLocaleString() : "-"}
                   </td>
-                  <td className="p-2 border space-x-2">
+                  <td className="p-2 border space-x-3">
                     {!u.is_admin && (
                       <button
                         onClick={() => promoteUser(u._id)}
@@ -223,13 +221,13 @@ const AdminDashboard = () => {
         <input
           type="text"
           placeholder="Search by name/email..."
-          className="mb-4 p-2 border w-64"
+          className="mb-4 p-2 border rounded-lg w-64"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white shadow rounded">
-            <thead>
+          <table className="min-w-full bg-white shadow rounded-xl">
+            <thead className="sticky top-0 bg-gray-50">
               <tr>
                 <th className="p-2 text-left border">Patient Name</th>
                 <th className="p-2 text-left border">Uploader</th>
@@ -240,7 +238,7 @@ const AdminDashboard = () => {
             </thead>
             <tbody>
               {filteredUploads.map((u) => (
-                <tr key={u._id}>
+                <tr key={u._id} className="hover:bg-gray-50">
                   <td className="p-2 border">{u.patient_name}</td>
                   <td className="p-2 border">{u.user_email || ""}</td>
                   <td className="p-2 border">

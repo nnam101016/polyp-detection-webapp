@@ -52,7 +52,7 @@ MASKRCNN_SCORE_THRESH = 0.75      # per notebook
 MASKRCNN_MASK_THRESH = 0.5
 
 # U-Net (SMP) — match your friend's notebook
-UNET_WEIGHTS = "./model/unet_effb7_adam.pth"
+UNET_WEIGHTS = "./model/unetpp_effb7_adam.pth"
 UNET_ENCODER_NAME = "efficientnet-b7"
 UNET_INPUT_SIZE   = (256, 256)    # (W,H)
 UNET_THRESHOLD    = 0.75
@@ -83,6 +83,7 @@ AVAILABLE_MODELS = {
     "yolo_11n":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_11N)},
     "maskrcnn": {"task": TASK_SEG_INSTANCE, "model": None, "weights": MASKRCNN_WEIGHTS},
     "unet":     {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
+    "unetpp":    {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
 }
 
 for k, v in AVAILABLE_MODELS.items():
@@ -101,20 +102,30 @@ def load_maskrcnn(weights_path: str):
     model.eval()
     return model
 
-def load_unet(weights_path: str):
+def load_unet(weights_path: str, use_plusplus: bool = False):
     if not _HAS_SMP:
         raise RuntimeError("segmentation_models_pytorch is not installed on the server.")
-    model = smp.Unet(
-        encoder_name=UNET_ENCODER_NAME,
-        encoder_weights=None,
-        in_channels=3,
-        classes=1,
-        activation=None,
-    )
+    if use_plusplus:
+        model = smp.UnetPlusPlus(
+            encoder_name=UNET_ENCODER_NAME,
+            encoder_weights=None,
+            in_channels=3,
+            classes=1,
+            activation=None,
+        )
+    else:
+        model = smp.Unet(
+            encoder_name=UNET_ENCODER_NAME,
+            encoder_weights=None,
+            in_channels=3,
+            classes=1,
+            activation=None,
+        )
     sd = torch.load(weights_path, map_location="cpu")
     model.load_state_dict(sd, strict=False)
     model.eval()
     return model
+
 
 def _ensure_loaded(name: str):
     entry = AVAILABLE_MODELS.get(name)
@@ -125,10 +136,11 @@ def _ensure_loaded(name: str):
     if name == "maskrcnn":
         entry["model"] = load_maskrcnn(entry["weights"])
     elif name == "unet":
-        entry["model"] = load_unet(entry["weights"])
+        entry["model"] = load_unet(entry["weights"], use_plusplus=False)
+    elif name == "unetpp":
+        entry["model"] = load_unet(entry["weights"], use_plusplus=True)
     else:
         raise HTTPException(status_code=500, detail=f"Unknown lazy model '{name}'")
-
 
 # =========================
 # Rendering & result utils
@@ -250,29 +262,17 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
     return overlay, result
 
 
-def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
-    if thresh is None:
-        thresh = UNET_THRESHOLD
-
+def predict_unet(model, pil_img, thresh: float = 0.5, class_idx: int = 0):
     img = pil_img.convert("RGB")
     H, W = img.height, img.width
     rgb = np.array(img)
 
-    if UNET_INPUT_SIZE:
-        resized = cv2.resize(rgb, UNET_INPUT_SIZE, interpolation=cv2.INTER_LINEAR)
-    else:
-        resized = rgb
-
-    params = smp.encoders.get_preprocessing_params(UNET_ENCODER_NAME)
-    mean = np.array(params["mean"], dtype=np.float32)
-    std  = np.array(params["std"], dtype=np.float32)
-
+    # resize to model input size
+    resized = cv2.resize(rgb, UNET_INPUT_SIZE, interpolation=cv2.INTER_LINEAR)
     x = resized.astype(np.float32) / 255.0
-    x = (x - mean) / std
-    x = np.transpose(x, (2, 0, 1))[None, ...]
+    x = np.transpose(x, (2, 0, 1))[None, ...]  # (1,3,H,W)
     x_t = torch.from_numpy(x)
 
-    t0 = time.time()
     with torch.no_grad():
         out = model(x_t)
         if isinstance(out, (list, tuple)):
@@ -282,48 +282,30 @@ def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
         else:
             probs_all = torch.softmax(out, dim=1)[0].cpu().numpy()
             probs_small = probs_all[class_idx]
-    infer_ms = {"inference": (time.time() - t0) * 1000.0}
 
-    if UNET_INPUT_SIZE and (resized.shape[0] != H or resized.shape[1] != W):
-        probs = cv2.resize(probs_small, (W, H), interpolation=cv2.INTER_LINEAR)
-    else:
-        probs = probs_small
+    # resize back to original size
+    probs = cv2.resize(probs_small, (W, H), interpolation=cv2.INTER_LINEAR)
 
-    if UNET_SMOOTH_GAUSS and UNET_SMOOTH_GAUSS > 0:
-        probs = cv2.GaussianBlur(probs, ksize=(0, 0), sigmaX=UNET_SMOOTH_GAUSS)
-
+    # threshold → binary mask
     mask_bin = (probs >= float(thresh)).astype(np.uint8)
 
-    if UNET_MORPH_KERNEL and UNET_MORPH_KERNEL >= 3:
-        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (UNET_MORPH_KERNEL, UNET_MORPH_KERNEL))
-        mask_bin = cv2.morphologyEx(mask_bin, cv2.MORPH_OPEN,  k, iterations=1)
-        mask_bin = cv2.morphologyEx(mask_bin, cv2.MORPH_CLOSE, k, iterations=1)
-
-    num, labels_cc = cv2.connectedComponents(mask_bin, connectivity=4)
-    dets = []
-    min_area = int(UNET_MIN_AREA_PCT * (H * W))
-    if min_area < 1:
-        min_area = 1
-
-    for lab in range(1, num):
-        region = (labels_cc == lab).astype(np.uint8)
-        area = int(region.sum())
-        if area < min_area:
-            continue
-        conf = float(probs[labels_cc == lab].mean())
-        polys = _mask_to_polygons(region)
-        dets.append({
-            "detection_id": len(dets),
-            "class_id": 0,
-            "class_name": "polyp",
-            "confidence": conf,
-            "mask_area_px": area,
-            "mask_polygons": polys
-        })
-
+    # overlay for visualization
     overlay = draw_mask_overlay(np.array(img), mask_bin)
 
-    summary = build_summary(dets, W, H, timing_ms=infer_ms)
+    # detections (minimal)
+    dets = []
+    area = int(mask_bin.sum())
+    if area > 0:
+        dets.append({
+            "detection_id": 0,
+            "class_id": 0,
+            "class_name": "polyp",
+            "confidence": float(probs[mask_bin == 1].mean()),
+            "mask_area_px": area,
+            "mask_polygons": _mask_to_polygons(mask_bin)
+        })
+
+    summary = build_summary(dets, W, H)
     result = {
         "schema": RESULT_SCHEMA_VERSION,
         "result_meta": {"task": TASK_SEG_SEMANTIC},
@@ -332,60 +314,110 @@ def predict_unet(model, pil_img, thresh: float = None, class_idx: int = 0):
     }
     return overlay, result
 
+# ==== YOLO (Ultralytics) -> result dict ======================================
+def _safe_class_name(class_names, cls_id: int):
+    try:
+        # class_names can be a dict or a list
+        if isinstance(class_names, dict):
+            return class_names.get(cls_id, str(cls_id))
+        return class_names[cls_id]
+    except Exception:
+        return str(cls_id)
 
+def _norm_xy_list(xy_list, w: int, h: int):
+    # Normalize [x1,y1,x2,y2,...] by image size
+    out = []
+    for i, v in enumerate(xy_list):
+        out.append(float(v) / (w if i % 2 == 0 else h))
+    return out
 
-def yolo_result_to_dict(res, names: dict):
+def yolo_result_to_dict(res, class_names):
+    """
+    Convert an Ultralytics YOLO 'Results' object (single image) into your
+    standardized dict schema used elsewhere in this app.
+    """
+    # Image size
+    orig_h, orig_w = res.orig_shape[:2] if hasattr(res, "orig_shape") else (None, None)
+    if orig_h is None or orig_w is None:
+        # Fallback to PIL size if available
+        try:
+            orig_h, orig_w = res.orig_img.shape[:2]
+        except Exception:
+            orig_w = orig_w or 0
+            orig_h = orig_h or 0
+
     dets = []
-    img_h, img_w = res.orig_shape if getattr(res, "orig_shape", None) else (-1, -1)
 
+    # Boxes
     boxes = getattr(res, "boxes", None)
-    if boxes is not None and boxes.xyxy is not None:
-        xyxy = boxes.xyxy.cpu().numpy()
-        xywh = boxes.xywh.cpu().numpy()
-        conf = boxes.conf.cpu().numpy() if boxes.conf is not None else None
-        cls  = boxes.cls.cpu().numpy()  if boxes.cls  is not None else None
+    if boxes is not None and len(boxes) > 0:
+        # Tensors → CPU numpy
+        xyxy = boxes.xyxy.cpu().numpy() if hasattr(boxes.xyxy, "cpu") else boxes.xyxy
+        xywh = boxes.xywh.cpu().numpy() if hasattr(boxes.xywh, "cpu") else boxes.xywh
+        conf = boxes.conf.cpu().numpy() if hasattr(boxes.conf, "cpu") else boxes.conf
+        cls  = boxes.cls.cpu().numpy()  if hasattr(boxes.cls, "cpu")  else boxes.cls
 
-        for i in range(xyxy.shape[0]):
-            cls_id = int(cls[i]) if cls is not None else -1
-            w = float(xywh[i][2])
-            h = float(xywh[i][3])
-            dets.append({
+        for i in range(len(xyxy)):
+            x1, y1, x2, y2 = [float(v) for v in xyxy[i].tolist()]
+            cx, cy, bw, bh  = [float(v) for v in xywh[i].tolist()]
+            c  = float(conf[i])
+            ci = int(cls[i])
+            name = _safe_class_name(class_names, ci)
+
+            # Derived metrics
+            bbox_area_px = int(max(bw, 0.0) * max(bh, 0.0))
+            aspect_ratio = float(bw / bh) if bh > 0 else None
+
+            det = {
                 "detection_id": i,
-                "class_id": cls_id,
-                "class_name": names.get(cls_id, str(cls_id)),
-                "confidence": float(conf[i]) if conf is not None else None,
+                "class_id": ci,
+                "class_name": name,
+                "confidence": c,
+                "bbox_xyxy": [x1, y1, x2, y2],
+                "bbox_xywh": [cx, cy, bw, bh],
+                "bbox_xyxy_norm": _norm_xy_list([x1, y1, x2, y2], orig_w, orig_h) if orig_w and orig_h else None,
+                "bbox_xywh_norm": [
+                    cx / orig_w if orig_w else None,
+                    cy / orig_h if orig_h else None,
+                    bw / orig_w if orig_w else None,
+                    bh / orig_h if orig_h else None,
+                ],
+                "bbox_area_px": bbox_area_px,
+                "aspect_ratio": aspect_ratio,
+            }
+            dets.append(det)
 
-                "bbox_xyxy": [float(v) for v in xyxy[i]],
-                "bbox_xywh": [float(v) for v in xywh[i]],
-                "bbox_area_px": round(w * h, 2),
+    # Optional: polygon masks if present (e.g., if model produces masks)
+    # Ultralytics provides res.masks.xy as a list of Nx2 polygons per detection in original image scale.
+    masks = getattr(res, "masks", None)
+    if masks is not None and getattr(masks, "xy", None):
+        # Each detection may have one or more polygons
+        polys_per_det = masks.xy
+        # Ensure dets list is at least that long
+        for i, polys in enumerate(polys_per_det):
+            if i >= len(dets):
+                continue
+            flat_polys = []
+            total_area = 0.0
+            for poly in polys:
+                # poly: ndarray shape (N, 2) in pixel coords
+                pts = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
+                if pts.shape[0] >= 3:
+                    total_area += float(cv2.contourArea(pts))
+                    flat_polys.append([float(x) for xy in pts for x in xy])
+            if flat_polys:
+                dets[i]["mask_polygons"] = flat_polys
+                dets[i]["mask_area_px"] = int(round(total_area))
 
-                "bbox_xyxy_norm": [float(v) / img_w if idx % 2 == 0 else float(v) / img_h
-                                   for idx, v in enumerate(xyxy[i])],
-                "bbox_xywh_norm": [float(v) / img_w if idx % 2 == 0 else float(v) / img_h
-                                   for idx, v in enumerate(xywh[i])],
-
-                "aspect_ratio": round(w / h, 4) if h > 0 else None
-            })
-
-    if getattr(res, "masks", None) is not None and res.masks is not None and len(dets) == len(res.masks):
-        masks = res.masks.data.cpu().numpy()
-        for i in range(len(dets)):
-            dets[i]["mask_area_px"] = int(masks[i].round().sum())
-            try:
-                polygons = res.masks.xy[i]
-                dets[i]["mask_polygons"] = [list(map(float, p)) for p in polygons]
-            except Exception:
-                pass
-
-    speed = getattr(res, "speed", {}) or {}
-    summary = build_summary(dets, img_w, img_h, timing_ms={k: float(v) for k, v in speed.items()})
-
-    return {
+    # Summary + schema
+    summary = build_summary(dets, orig_w or 0, orig_h or 0)
+    result = {
         "schema": RESULT_SCHEMA_VERSION,
         "result_meta": {"task": TASK_DETECTION},
         "detections": dets,
-        "summary": summary
+        "summary": summary,
     }
+    return result
 
 
 # ======================

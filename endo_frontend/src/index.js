@@ -26,10 +26,10 @@ root.render(
   <React.StrictMode>
     <Router>
       {/* Sticky footer layout */}
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col ">
         <NavBar />
         {/* Page content grows to fill leftover space */}
-        <main className="flex-1">
+        <main className="flex-1 bg-blue-30">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<Login />} />

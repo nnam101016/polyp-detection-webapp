@@ -1,191 +1,140 @@
-// ResultView.js
-import React, { useState } from "react";
+// src/ResultView.js
+import React from "react";
+
+/**
+ * Clinically-focused rendering of a result:
+ * - No model/AI/timing fields
+ * - Simple summary + per-polyp measurements
+ * - Uses mask area when available; falls back to bbox area
+ */
 
 const fmt2 = (v) =>
-  typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(2)) : v ?? "—";
-const join = (arr) =>
-  Array.isArray(arr) ? arr.map((n) => (typeof n === "number" ? fmt2(n) : n)).join(", ") : "—";
+  typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(2)) : "—";
 
-function KvRow({ label, children }) {
+function Stat({ label, value, sub }) {
   return (
-    <div className="flex gap-2 text-sm">
-      <div className="font-semibold">{label}</div>
-      <div>{children}</div>
+    <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="text-xs font-semibold text-gray-500">{label}</div>
+      <div className="text-lg font-bold">{value}</div>
+      {sub ? <div className="text-xs text-gray-500 mt-0.5">{sub}</div> : null}
     </div>
   );
 }
 
-function RawJsonToggle({ data }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-2">
-      <button className="underline text-blue-600" type="button" onClick={() => setOpen((v) => !v)}>
-        {open ? "Hide JSON" : "Raw JSON"}
-      </button>
-      {open && (
-        <pre className="whitespace-pre-wrap text-xs mt-1 border rounded p-2 bg-gray-50">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      )}
-    </div>
-  );
+function percent(val, total) {
+  if (!total || val == null) return null;
+  return (val / total) * 100.0;
 }
 
-function DetectionsTable({ detections }) {
-  const [openRows, setOpenRows] = useState({});
-  if (!detections?.length) return <div className="mt-2">No detections</div>;
-  const toggle = (i) => setOpenRows((s) => ({ ...s, [i]: !s[i] }));
-
-  const hasBboxes = detections.some((d) => Array.isArray(d.bbox_xyxy));
-  const hasMasks = detections.some((d) => "mask_area_px" in d || "mask_polygons" in d);
+function PerPolypTable({ detections = [], imgW = 0, imgH = 0 }) {
+  if (!detections.length) return <div className="text-sm">No polyps detected.</div>;
+  const imgPx = imgW * imgH || 0;
 
   return (
-    <div className="mt-3 border rounded">
-      <div className="px-3 py-2 font-semibold bg-gray-50 border-b">Detections</div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left border-b">
-              <th className="p-2">#</th>
-              <th className="p-2">Class</th>
-              <th className="p-2">Conf</th>
+    <div className="overflow-x-auto rounded-xl border bg-white">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-50">
+          <tr className="text-left border-b">
+            <th className="p-2">#</th>
+            <th className="p-2">Size (w×h, px)</th>
+            <th className="p-2">Estimated area</th>
+            <th className="p-2">Image coverage</th>
+            <th className="p-2">Approx. location (cx, cy)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {detections.map((d, i) => {
+            const [cx, cy, bw, bh] = d.bbox_xywh || [];
+            const areaMask = typeof d.mask_area_px === "number" ? d.mask_area_px : null;
+            const areaBox =
+              typeof d.bbox_area_px === "number"
+                ? d.bbox_area_px
+                : (typeof bw === "number" && typeof bh === "number" ? bw * bh : null);
 
-              {hasBboxes && (
-                <>
-                  <th className="p-2">xyxy</th>
-                  <th className="p-2">w×h</th>
-                  <th className="p-2">Area(px²)</th>
-                  <th className="p-2">Aspect</th>
-                </>
-              )}
+            // Prefer mask area if provided; otherwise use bbox area as an estimate
+            const areaPx = areaMask != null ? areaMask : areaBox;
+            const areaPct = imgPx ? percent(areaPx, imgPx) : null;
 
-              {!hasBboxes && hasMasks && (
-                <>
-                  <th className="p-2">Mask area(px)</th>
-                  <th className="p-2">Polygons</th>
-                </>
-              )}
-
-              <th className="p-2">More</th>
-            </tr>
-          </thead>
-          <tbody>
-            {detections.map((d, i) => {
-              const [x, y, w, h] = d.bbox_xywh || [];
-              const polyCount = Array.isArray(d.mask_polygons) ? d.mask_polygons.length : 0;
-
-              return (
-                <React.Fragment key={i}>
-                  <tr className="border-b align-top">
-                    <td className="p-2">{d.detection_id ?? i}</td>
-                    <td className="p-2">{d.class_name ?? d.class_id}</td>
-                    <td className="p-2">{fmt2(d.confidence)}</td>
-
-                    {hasBboxes && (
-                      <>
-                        <td className="p-2">[{join(d.bbox_xyxy)}]</td>
-                        <td className="p-2">
-                          {fmt2(w)} × {fmt2(h)}
-                        </td>
-                        <td className="p-2">{fmt2(d.bbox_area_px)}</td>
-                        <td className="p-2">{fmt2(d.aspect_ratio)}</td>
-                      </>
-                    )}
-
-                    {!hasBboxes && hasMasks && (
-                      <>
-                        <td className="p-2">{fmt2(d.mask_area_px)}</td>
-                        <td className="p-2">{polyCount ? `${polyCount} polygon(s)` : "—"}</td>
-                      </>
-                    )}
-
-                    <td className="p-2">
-                      <button
-                        className="underline text-blue-600"
-                        onClick={() => toggle(i)}
-                        type="button"
-                      >
-                        {openRows[i] ? "Hide" : "Show"}
-                      </button>
-                    </td>
-                  </tr>
-
-                  {openRows[i] && (
-                    <tr className="border-b bg-gray-50">
-                      <td className="p-2" colSpan={hasBboxes ? 8 : hasMasks ? 6 : 5}>
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          {/* BBox extras */}
-                          {hasBboxes && (
-                            <>
-                              <KvRow label="xywh:">[{join(d.bbox_xywh)}]</KvRow>
-                              <KvRow label="xyxy (norm):">[{join(d.bbox_xyxy_norm)}]</KvRow>
-                              <KvRow label="xywh (norm):">[{join(d.bbox_xywh_norm)}]</KvRow>
-                            </>
-                          )}
-                          {/* Mask extras */}
-                          {"mask_area_px" in d && (
-                            <KvRow label="Mask area(px):">{fmt2(d.mask_area_px)}</KvRow>
-                          )}
-                          {"mask_polygons" in d && Array.isArray(d.mask_polygons) && (
-                            <KvRow label="Mask polygons:">
-                              {d.mask_polygons.length
-                                ? `${d.mask_polygons.length} polygon(s)`
-                                : "—"}
-                            </KvRow>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+            return (
+              <tr key={i} className="border-t align-top hover:bg-gray-50">
+                <td className="p-2">{d.detection_id ?? i + 1}</td>
+                <td className="p-2">
+                  {typeof bw === "number" && typeof bh === "number"
+                    ? `${fmt2(bw)} × ${fmt2(bh)}`
+                    : "—"}
+                </td>
+                <td className="p-2">
+                  {areaPx != null ? (
+                    <>
+                      {fmt2(areaPx)} px
+                      {areaMask == null && <span className="text-gray-500"> (estimated)</span>}
+                    </>
+                  ) : (
+                    "—"
                   )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                </td>
+                <td className="p-2">
+                  {areaPct != null ? `${fmt2(areaPct)}%` : "—"}
+                </td>
+                <td className="p-2">
+                  {typeof cx === "number" && typeof cy === "number"
+                    ? `${fmt2(cx)}, ${fmt2(cy)}`
+                    : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 export default function ResultView({ result }) {
-  if (!result) return <>—</>;
-  const { summary = {}, detections = [], result_meta = {} } = result;
+  if (!result) return null;
 
-  const classesText = summary.class_counts
-    ? Object.entries(summary.class_counts)
-        .map(([k, v]) => `${k}(${v})`)
-        .join(", ")
-    : "—";
-  const times = summary.time_ms || {};
+  const { summary = {}, detections = [] } = result;
+  const imgW = summary?.image_size?.width || 0;
+  const imgH = summary?.image_size?.height || 0;
+  const imgPx = imgW * imgH || 0;
+
+  // Compute total and max area using mask area when present, else bbox area as estimate
+  const areas = detections.map((d) => {
+    if (typeof d.mask_area_px === "number") return d.mask_area_px;
+    if (typeof d.bbox_area_px === "number") return d.bbox_area_px;
+    const [ , , bw, bh ] = d.bbox_xywh || [];
+    return (typeof bw === "number" && typeof bh === "number") ? bw * bh : 0;
+  });
+
+  const totalAreaPx = areas.reduce((a, b) => a + (b || 0), 0);
+  const largestAreaPx = areas.reduce((m, v) => (v > m ? v : m), 0);
+  const totalPct = imgPx ? percent(totalAreaPx, imgPx) : null;
+  const largestPct = imgPx ? percent(largestAreaPx, imgPx) : null;
 
   return (
-    <div className="text-sm max-w-3xl w-full">
-      <div className="rounded border p-3 bg-gray-50">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-1">
-          <KvRow label="Detections:">{summary.num_detections ?? 0}</KvRow>
-          <KvRow label="Classes:">{classesText}</KvRow>
-          <KvRow label="Confidence:">
-            mean {fmt2(summary.confidence_mean)}, max {fmt2(summary.confidence_max)}
-          </KvRow>
-          <KvRow label="Image size:">
-            {summary.image_size
-              ? `${summary.image_size.width}×${summary.image_size.height}`
-              : "—"}
-          </KvRow>
-          <KvRow label="Timing (ms):">
-            {Object.keys(times).length
-              ? Object.entries(times)
-                  .map(([k, v]) => `${k}:${fmt2(v)}`)
-                  .join("  ")
-              : "—"}
-          </KvRow>
-          {"task" in result_meta && <KvRow label="Task:">{result_meta.task}</KvRow>}
-          {"model_name" in result_meta && <KvRow label="Model:">{result_meta.model_name}</KvRow>}
-        </div>
+    <div className="max-w-3xl w-full">
+      {/* Summary: clinically-relevant only */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <Stat label="Polyps detected" value={summary.num_detections ?? 0} />
+        <Stat
+          label="Largest estimated area"
+          value={largestAreaPx ? `${fmt2(largestAreaPx)} px` : "—"}
+          sub={largestPct != null ? `${fmt2(largestPct)}% of image` : ""}
+        />
+        <Stat
+          label="Total estimated burden"
+          value={totalAreaPx ? `${fmt2(totalAreaPx)} px` : "—"}
+          sub={totalPct != null ? `${fmt2(totalPct)}% of image` : ""}
+        />
       </div>
 
-      <DetectionsTable detections={detections} />
-      <RawJsonToggle data={result} />
+      {/* Per-polyp detail */}
+      <PerPolypTable detections={detections} imgW={imgW} imgH={imgH} />
+
+      {/* Disclaimer */}
+      <p className="mt-3 text-xs text-gray-500">
+        Measurements are automated estimates derived from image analysis and are intended as decision support, not a diagnosis.
+      </p>
     </div>
   );
 }

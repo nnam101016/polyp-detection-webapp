@@ -81,7 +81,7 @@ export default function ProfilePage({ onProfileUpdated }) {
   }
 
 return (
-  <div className="w-full bg-gray-100">
+  <div className="w-full">
     <div className="min-h-[70vh] flex flex-col items-center justify-center px-4">
       <div className="bg-white p-8 rounded shadow w-full max-w-2xl">
         <h2 className="text-2xl font-semibold mb-6 text-center">Your Profile</h2>
