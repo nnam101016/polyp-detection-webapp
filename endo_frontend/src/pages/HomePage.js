@@ -52,7 +52,7 @@ export default function HomePage() {
     <div className="min-h-screen w-full flex flex-col items-center gap-0 bg-white">
       {/* HERO */}
       <section id="quick-start" className="w-full text-white">
-        <div className="bg-gradient-to-r from-egypt-blue via-teal-600 to-egypt-blue">
+        <div className="bg-gradient-to-r from-egypt-blue/90 via-teal-500 to-egypt-blue/70">
           <div className="mx-auto max-w-7xl px-4 py-12 grid md:grid-cols-2 gap-8 items-center">
             <img
               src={banner}
@@ -86,11 +86,11 @@ export default function HomePage() {
               <div className="mt-8 grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl bg-white/10 backdrop-blur border border-white/20 p-3">
                   <div className="text-2xl font-bold">{stats.clinicians}+</div>
-                  <div className="text-xs text-white/80">Clinicians</div>
+                  <div className="text-xs text-white/80">Clinicians*</div>
                 </div>
                 <div className="rounded-xl bg-white/10 backdrop-blur border border-white/20 p-3">
                   <div className="text-2xl font-bold">{stats.images.toLocaleString()}</div>
-                  <div className="text-xs text-white/80">Images Analyzed</div>
+                  <div className="text-xs text-white/80">Images Analyzed*</div>
                 </div>
                 <div className="rounded-xl bg-white/10 backdrop-blur border border-white/20 p-3">
                   <div className="text-2xl font-bold">{stats.sensitivity}%</div>

@@ -1,4 +1,3 @@
-// src/ResultView.js
 import React from "react";
 
 /**
@@ -51,7 +50,6 @@ function PerPolypTable({ detections = [], imgW = 0, imgH = 0 }) {
                 ? d.bbox_area_px
                 : (typeof bw === "number" && typeof bh === "number" ? bw * bh : null);
 
-            // Prefer mask area if provided; otherwise use bbox area as an estimate
             const areaPx = areaMask != null ? areaMask : areaBox;
             const areaPct = imgPx ? percent(areaPx, imgPx) : null;
 
@@ -98,7 +96,6 @@ export default function ResultView({ result }) {
   const imgH = summary?.image_size?.height || 0;
   const imgPx = imgW * imgH || 0;
 
-  // Compute total and max area using mask area when present, else bbox area as estimate
   const areas = detections.map((d) => {
     if (typeof d.mask_area_px === "number") return d.mask_area_px;
     if (typeof d.bbox_area_px === "number") return d.bbox_area_px;
@@ -113,7 +110,6 @@ export default function ResultView({ result }) {
 
   return (
     <div className="max-w-3xl w-full">
-      {/* Summary: clinically-relevant only */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <Stat label="Polyps detected" value={summary.num_detections ?? 0} />
         <Stat
@@ -128,10 +124,8 @@ export default function ResultView({ result }) {
         />
       </div>
 
-      {/* Per-polyp detail */}
       <PerPolypTable detections={detections} imgW={imgW} imgH={imgH} />
 
-      {/* Disclaimer */}
       <p className="mt-3 text-xs text-gray-500">
         Measurements are automated estimates derived from image analysis and are intended as decision support, not a diagnosis.
       </p>

@@ -1,20 +1,20 @@
 # main.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import Counter
 from typing import List
+
 import io
 import os
 import uuid
 import time
-from datetime import datetime, timezone, timedelta
-
 
 import numpy as np
 from PIL import Image
 
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, Form, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, Form, File, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.gzip import GZipMiddleware
 
 from dotenv import load_dotenv
 from jose import jwt, JWTError
@@ -28,6 +28,7 @@ import torch
 import cv2
 from torchvision.transforms import functional as TF
 from torchvision.models.detection import maskrcnn_resnet50_fpn
+from bson import ObjectId
 
 try:
     import segmentation_models_pytorch as smp
@@ -35,7 +36,7 @@ try:
 except Exception:
     _HAS_SMP = False
 
-import s3  # your existing S3 helper
+import s3  # project S3 helper module
 
 
 # =========================
@@ -47,20 +48,15 @@ YOLO_WEIGHTS_11N = "./model/yolo_11n.pt"
 
 # Mask R-CNN (torchvision)
 MASKRCNN_WEIGHTS = "./model/maskrcnn_best.pth"
-MASKRCNN_INPUT_SIZE = (256, 256)  # (W,H) per notebook
-MASKRCNN_SCORE_THRESH = 0.75      # per notebook
+MASKRCNN_INPUT_SIZE = (256, 256)  # (W,H)
+MASKRCNN_SCORE_THRESH = 0.75
 MASKRCNN_MASK_THRESH = 0.5
 
-# U-Net (SMP) — match your friend's notebook
+# U-Net (SMP)
 UNET_WEIGHTS = "./model/unetpp_effb7_adam.pth"
 UNET_ENCODER_NAME = "efficientnet-b7"
 UNET_INPUT_SIZE   = (256, 256)    # (W,H)
 UNET_THRESHOLD    = 0.75
-
-# Post-processing to suppress speckles
-UNET_MIN_AREA_PCT = 0.0005
-UNET_MORPH_KERNEL = 3
-UNET_SMOOTH_GAUSS = 1.0
 
 TASK_DETECTION     = "detection"
 TASK_SEG_INSTANCE  = "segmentation_instance"
@@ -69,7 +65,6 @@ RESULT_SCHEMA_VERSION = 2
 
 # Datetime UTC+7
 TZ_UTC7 = timezone(timedelta(hours=7))
-
 def now_utc7():
     return datetime.now(TZ_UTC7)
 
@@ -79,11 +74,11 @@ def now_utc7():
 # =========================
 
 AVAILABLE_MODELS = {
-    "yolo_9t":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_9T)},
-    "yolo_11n":      {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_11N)},
+    "yolo_9t": {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_9T)},
+    "yolo_11n": {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_11N)},
     "maskrcnn": {"task": TASK_SEG_INSTANCE, "model": None, "weights": MASKRCNN_WEIGHTS},
     "unet":     {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
-    "unetpp":    {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
+    "unetpp":   {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
 }
 
 for k, v in AVAILABLE_MODELS.items():
@@ -189,7 +184,8 @@ def _mask_to_polygons(mask_bin):
 
 def build_summary(dets, img_w, img_h, timing_ms=None):
     class_counts = Counter([d.get("class_name", "polyp") for d in dets])
-    confs = [d["confidence"] for d in dets if d.get("confidence") is not None]
+    confs = [d.get("confidence") for d in dets if d.get("confidence") is not None]
+    confs = [c for c in confs if c is not None]
     return {
         "num_detections": len(dets),
         "class_counts": dict(class_counts),
@@ -251,7 +247,6 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
             })
 
     overlay = draw_mask_overlay(np.array(img), union_mask)
-
     summary = build_summary(dets, orig_w, orig_h, timing_ms=infer_ms)
     result = {
         "schema": RESULT_SCHEMA_VERSION,
@@ -262,15 +257,14 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
     return overlay, result
 
 
-def predict_unet(model, pil_img, thresh: float = 0.5, class_idx: int = 0):
+def predict_unet(model, pil_img, thresh: float = UNET_THRESHOLD, class_idx: int = 0):
     img = pil_img.convert("RGB")
     H, W = img.height, img.width
     rgb = np.array(img)
 
-    # resize to model input size
     resized = cv2.resize(rgb, UNET_INPUT_SIZE, interpolation=cv2.INTER_LINEAR)
     x = resized.astype(np.float32) / 255.0
-    x = np.transpose(x, (2, 0, 1))[None, ...]  # (1,3,H,W)
+    x = np.transpose(x, (2, 0, 1))[None, ...]
     x_t = torch.from_numpy(x)
 
     with torch.no_grad():
@@ -283,16 +277,10 @@ def predict_unet(model, pil_img, thresh: float = 0.5, class_idx: int = 0):
             probs_all = torch.softmax(out, dim=1)[0].cpu().numpy()
             probs_small = probs_all[class_idx]
 
-    # resize back to original size
     probs = cv2.resize(probs_small, (W, H), interpolation=cv2.INTER_LINEAR)
-
-    # threshold → binary mask
     mask_bin = (probs >= float(thresh)).astype(np.uint8)
-
-    # overlay for visualization
     overlay = draw_mask_overlay(np.array(img), mask_bin)
 
-    # detections (minimal)
     dets = []
     area = int(mask_bin.sum())
     if area > 0:
@@ -314,10 +302,10 @@ def predict_unet(model, pil_img, thresh: float = 0.5, class_idx: int = 0):
     }
     return overlay, result
 
-# ==== YOLO (Ultralytics) -> result dict ======================================
+# ==== YOLO -> result dict =====================================================
+
 def _safe_class_name(class_names, cls_id: int):
     try:
-        # class_names can be a dict or a list
         if isinstance(class_names, dict):
             return class_names.get(cls_id, str(cls_id))
         return class_names[cls_id]
@@ -325,21 +313,14 @@ def _safe_class_name(class_names, cls_id: int):
         return str(cls_id)
 
 def _norm_xy_list(xy_list, w: int, h: int):
-    # Normalize [x1,y1,x2,y2,...] by image size
     out = []
     for i, v in enumerate(xy_list):
         out.append(float(v) / (w if i % 2 == 0 else h))
     return out
 
 def yolo_result_to_dict(res, class_names):
-    """
-    Convert an Ultralytics YOLO 'Results' object (single image) into your
-    standardized dict schema used elsewhere in this app.
-    """
-    # Image size
     orig_h, orig_w = res.orig_shape[:2] if hasattr(res, "orig_shape") else (None, None)
     if orig_h is None or orig_w is None:
-        # Fallback to PIL size if available
         try:
             orig_h, orig_w = res.orig_img.shape[:2]
         except Exception:
@@ -348,10 +329,8 @@ def yolo_result_to_dict(res, class_names):
 
     dets = []
 
-    # Boxes
     boxes = getattr(res, "boxes", None)
     if boxes is not None and len(boxes) > 0:
-        # Tensors → CPU numpy
         xyxy = boxes.xyxy.cpu().numpy() if hasattr(boxes.xyxy, "cpu") else boxes.xyxy
         xywh = boxes.xywh.cpu().numpy() if hasattr(boxes.xywh, "cpu") else boxes.xywh
         conf = boxes.conf.cpu().numpy() if hasattr(boxes.conf, "cpu") else boxes.conf
@@ -364,11 +343,10 @@ def yolo_result_to_dict(res, class_names):
             ci = int(cls[i])
             name = _safe_class_name(class_names, ci)
 
-            # Derived metrics
             bbox_area_px = int(max(bw, 0.0) * max(bh, 0.0))
             aspect_ratio = float(bw / bh) if bh > 0 else None
 
-            det = {
+            dets.append({
                 "detection_id": i,
                 "class_id": ci,
                 "class_name": name,
@@ -384,23 +362,17 @@ def yolo_result_to_dict(res, class_names):
                 ],
                 "bbox_area_px": bbox_area_px,
                 "aspect_ratio": aspect_ratio,
-            }
-            dets.append(det)
+            })
 
-    # Optional: polygon masks if present (e.g., if model produces masks)
-    # Ultralytics provides res.masks.xy as a list of Nx2 polygons per detection in original image scale.
     masks = getattr(res, "masks", None)
     if masks is not None and getattr(masks, "xy", None):
-        # Each detection may have one or more polygons
         polys_per_det = masks.xy
-        # Ensure dets list is at least that long
         for i, polys in enumerate(polys_per_det):
             if i >= len(dets):
                 continue
             flat_polys = []
             total_area = 0.0
             for poly in polys:
-                # poly: ndarray shape (N, 2) in pixel coords
                 pts = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
                 if pts.shape[0] >= 3:
                     total_area += float(cv2.contourArea(pts))
@@ -409,7 +381,6 @@ def yolo_result_to_dict(res, class_names):
                 dets[i]["mask_polygons"] = flat_polys
                 dets[i]["mask_area_px"] = int(round(total_area))
 
-    # Summary + schema
     summary = build_summary(dets, orig_w or 0, orig_h or 0)
     result = {
         "schema": RESULT_SCHEMA_VERSION,
@@ -436,6 +407,7 @@ users_collection = db["users"]
 app = FastAPI()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -448,6 +420,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# GZip for smaller JSON payloads
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def hash_password(password: str) -> str:
@@ -479,12 +454,18 @@ class UserUpdate(BaseModel):
     occupation: str = ""
     phone: str = ""
 
-# NEW: admin create-user schema
 class AdminCreateUser(BaseModel):
     email: EmailStr
     password: constr(min_length=6)
     name: str | None = None
     is_admin: bool = False
+
+
+@app.on_event("startup")
+async def setup_indexes():
+    # DO NOT create {_id:-1}; Mongo requires _id:1 and creates it automatically.
+    # This compound index makes user-scoped, cursor-based pagination fast.
+    await scans_collection.create_index([("user_id", 1), ("_id", -1)])
 
 
 @app.post("/register")
@@ -540,7 +521,6 @@ async def admin_required(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access only.")
     return current_user
 
-# alias used below
 require_admin = admin_required
 
 
@@ -571,16 +551,15 @@ async def read_profile(current_user: dict = Depends(get_current_user)):
 # ==================
 # History Endpoints
 # ==================
+# Legacy (heavy) — kept for compatibility
 @app.get("/history")
 async def get_upload_history(current_user: dict = Depends(get_current_user)):
     cursor = (
         scans_collection
         .find({"user_id": str(current_user["_id"])})
-        .sort("datetime", -1)  # newest → oldest
+        .sort("datetime", -1)
     )
-
-    docs = await cursor.to_list(length=1000)  # or any sensible limit
-
+    docs = await cursor.to_list(length=1000)
     return [
         {
             "patient_name": d.get("patient_name"),
@@ -590,9 +569,132 @@ async def get_upload_history(current_user: dict = Depends(get_current_user)):
             "processed_s3_url": d.get("processed_s3_url"),
             "result": d.get("result"),
             "notes": d.get("notes"),
+            "model_used": d.get("model_used"),
+            "id": str(d.get("_id")),
         }
         for d in docs
     ]
+
+# Paged + summary-only (fast)
+@app.get("/history_paged")
+async def get_upload_history_paged(
+    limit: int = Query(20, ge=1, le=100),
+    cursor: str | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    q = {"user_id": str(current_user["_id"])}
+    if cursor:
+        try:
+            q["_id"] = {"$lt": ObjectId(cursor)}
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+
+    proj = {
+        "patient_name": 1,
+        "patient_id": 1,
+        "datetime": 1,
+        "s3_url": 1,
+        "processed_s3_url": 1,
+        "model_used": 1,
+        "result.summary": 1,
+    }
+
+    cur = scans_collection.find(q, proj).sort("_id", -1).limit(limit + 1)
+    docs = await cur.to_list(length=limit + 1)
+
+    next_cursor = None
+    if len(docs) > limit:
+        next_cursor = str(docs[-1]["_id"])
+        docs = docs[:-1]
+
+    items = []
+    for d in docs:
+        items.append({
+            "id": str(d["_id"]),
+            "patient_name": d.get("patient_name"),
+            "patient_id": d.get("patient_id"),
+            "datetime": d.get("datetime"),
+            "s3_url": d.get("s3_url"),
+            "processed_s3_url": d.get("processed_s3_url"),
+            "model_used": d.get("model_used") or "default",
+            "result": {"summary": d.get("result", {}).get("summary", {})},
+        })
+    return {"items": items, "next_cursor": next_cursor}
+
+# Detail on demand
+@app.get("/history/{upload_id}")
+async def get_upload_detail(upload_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        oid = ObjectId(upload_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+    d = await scans_collection.find_one({"_id": oid, "user_id": str(current_user["_id"])})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    d["_id"] = str(d["_id"])
+    return d
+
+# User bulk delete (Mongo + S3) — deletes only the caller’s docs
+class BulkDeletePayload(BaseModel):
+    ids: list[str]
+
+# Helper: delete S3 by URL (best-effort)
+def _delete_s3_url(url: str) -> bool:
+    if not url:
+        return False
+    # Try project helper first
+    for fn in ("delete_by_url", "delete_from_s3_url"):
+        if hasattr(s3, fn):
+            try:
+                getattr(s3, fn)(url)
+                return True
+            except Exception:
+                pass
+    # Fallback via boto3 if available
+    try:
+        import boto3
+        bucket = os.environ.get("S3_BUCKET") or os.environ.get("AWS_S3_BUCKET")
+        if not bucket:
+            return False
+        if f"{bucket}/" in url:
+            key = url.split(f"{bucket}/", 1)[-1]
+        else:
+            key = url.split("/", 3)[-1]
+        boto3.client("s3").delete_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+@app.post("/history/bulk_delete")
+async def user_bulk_delete_uploads(
+    payload: BulkDeletePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    # Validate ids
+    oid_list = []
+    for _id in payload.ids or []:
+        try:
+            oid_list.append(ObjectId(_id))
+        except Exception:
+            pass
+    if not oid_list:
+        return {"deleted_count": 0, "s3_deleted": 0}
+
+    # Load only caller-owned docs to enforce ownership and to collect S3 urls
+    q = {"_id": {"$in": oid_list}, "user_id": str(current_user["_id"])}
+    cursor = scans_collection.find(q, {"s3_url": 1, "processed_s3_url": 1})
+    urls = []
+    async for d in cursor:
+        if d.get("s3_url"): urls.append(d["s3_url"])
+        if d.get("processed_s3_url"): urls.append(d["processed_s3_url"])
+
+    s3_deleted = 0
+    for url in urls:
+        if _delete_s3_url(url):
+            s3_deleted += 1
+
+    res = await scans_collection.delete_many(q)
+    return {"deleted_count": res.deleted_count, "s3_deleted": s3_deleted}
 
 
 # ==============================
@@ -627,8 +729,7 @@ async def upload(
             preds = model.predict(image, verbose=False, iou=0.3)
             res = preds[0]
             result_dict = yolo_result_to_dict(res, model.names)
-            # res.plot() returns BGR; convert to RGB so colors are correct
-            rendered_bgr = res.plot()
+            rendered_bgr = res.plot()  # BGR
             rendered_rgb = cv2.cvtColor(rendered_bgr, cv2.COLOR_BGR2RGB)
             processed_img = Image.fromarray(rendered_rgb)
 
@@ -650,7 +751,7 @@ async def upload(
         buffer.seek(0)
         processed_s3_url = s3.upload_to_s3(buffer, "processed_" + unique_filename)
 
-        now = datetime.now(TZ_UTC7)
+        now = now_utc7()
 
         doc = {
             "user_id": str(current_user["_id"]),
@@ -681,7 +782,7 @@ async def upload(
 
 
 # ===============
-# Misc Endpoints
+# Models/meta
 # ===============
 @app.get("/models")
 async def get_models():
@@ -693,8 +794,8 @@ async def get_models():
 # ======================
 @app.put("/admin/users/{user_id}/promote")
 async def promote_user(user_id: str, current_user: dict = Depends(admin_required)):
-    from bson import ObjectId
-    result = await users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": {"is_admin": True}})
+    from bson import ObjectId as _OID
+    result = await users_collection.update_one({"_id": _OID(user_id)}, {"$set": {"is_admin": True}})
     return {"modified_count": result.modified_count}
 
 @app.get("/admin/stats")
@@ -712,9 +813,8 @@ async def get_all_users(current_user: dict = Depends(admin_required)):
         users.append(user)
     return users
 
-# NEW: create user (admin only)
 @app.post("/admin/users", status_code=201)
-async def admin_create_user(payload: AdminCreateUser, _admin=Depends(require_admin)):
+async def admin_create_user(payload: AdminCreateUser, _admin=Depends(admin_required)):
     existing = await users_collection.find_one({"email": payload.email})
     if existing:
         raise HTTPException(status_code=409, detail="Email already exists")
@@ -740,12 +840,13 @@ async def admin_create_user(payload: AdminCreateUser, _admin=Depends(require_adm
 
 @app.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(admin_required)):
-    from bson import ObjectId
-    result = await users_collection.delete_one({"_id": ObjectId(user_id)})
+    from bson import ObjectId as _OID
+    result = await users_collection.delete_one({"_id": _OID(user_id)})
     return {"deleted_count": result.deleted_count}
 
+# Legacy (heavy) — kept for existing UI
 @app.get("/admin/uploads")
-async def get_all_uploads(current_user: dict = Depends(admin_required)):
+async def admin_get_all_uploads(current_user: dict = Depends(admin_required)):
     cursor = scans_collection.find()
     uploads = []
     async for upload in cursor:
@@ -753,8 +854,77 @@ async def get_all_uploads(current_user: dict = Depends(admin_required)):
         uploads.append(upload)
     return uploads
 
-@app.delete("/admin/uploads/{upload_id}")
-async def delete_upload(upload_id: str, current_user: dict = Depends(admin_required)):
-    from bson import ObjectId
-    result = await scans_collection.delete_one({"_id": ObjectId(upload_id)})
-    return {"deleted_count": result.deleted_count}
+# Paged + summary-only for dashboard
+@app.get("/admin/uploads_paged")
+async def admin_get_uploads_paged(
+    limit: int = Query(50, ge=1, le=200),
+    cursor: str | None = None,
+    _admin = Depends(admin_required),
+):
+    q = {}
+    if cursor:
+        try:
+            q["_id"] = {"$lt": ObjectId(cursor)}
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+
+    proj = {
+        "patient_name": 1,
+        "user_email": 1,
+        "datetime": 1,
+        "s3_url": 1,
+        "processed_s3_url": 1,
+        "result.summary": 1,
+    }
+    cur = scans_collection.find(q, proj).sort("_id", -1).limit(limit + 1)
+    docs = await cur.to_list(length=limit + 1)
+
+    next_cursor = None
+    if len(docs) > limit:
+        next_cursor = str(docs[-1]["_id"])
+        docs = docs[:-1]
+
+    items = []
+    for d in docs:
+        items.append({
+            "_id": str(d["_id"]),
+            "patient_name": d.get("patient_name"),
+            "user_email": d.get("user_email"),
+            "datetime": d.get("datetime"),
+            "s3_url": d.get("s3_url"),
+            "processed_s3_url": d.get("processed_s3_url"),
+            "result": {"summary": d.get("result", {}).get("summary", {})},
+        })
+    return {"items": items, "next_cursor": next_cursor}
+
+@app.post("/admin/uploads/bulk_delete")
+async def admin_bulk_delete_uploads(
+    payload: BulkDeletePayload = Body(...),
+    _admin = Depends(admin_required),
+):
+    if not payload.ids:
+        return {"deleted_count": 0, "s3_deleted": 0}
+
+    oid_list = []
+    for _id in payload.ids:
+        try:
+            oid_list.append(ObjectId(_id))
+        except Exception:
+            pass
+    if not oid_list:
+        return {"deleted_count": 0, "s3_deleted": 0}
+
+    # fetch docs to get S3 URLs
+    docs = scans_collection.find({"_id": {"$in": oid_list}}, {"s3_url": 1, "processed_s3_url": 1})
+    urls = []
+    async for d in docs:
+        if d.get("s3_url"): urls.append(d["s3_url"])
+        if d.get("processed_s3_url"): urls.append(d["processed_s3_url"])
+
+    s3_deleted = 0
+    for url in urls:
+        if _delete_s3_url(url):
+            s3_deleted += 1
+
+    res = await scans_collection.delete_many({"_id": {"$in": oid_list}})
+    return {"deleted_count": res.deleted_count, "s3_deleted": s3_deleted}

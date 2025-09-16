@@ -5,7 +5,8 @@ import API from "../api";
 
 export default function NavBar() {
   const [profile, setProfile] = useState(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false); // mobile menu
+  const [userMenuOpen, setUserMenuOpen] = useState(false); // desktop dropdown
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -44,75 +45,78 @@ export default function NavBar() {
 
   const displayName = profile?.name || profile?.email || localStorage.getItem("user_name");
 
-  // Desktop link styling with larger, clearer text
-  const desktopLink = ({ isActive }) =>
+  // Desktop nav link style
+  const navLinkStyle = ({ isActive }) =>
     [
-      "px-3 py-2 rounded-full text-base font-semibold transition-colors",
+      "px-3 py-1.5 rounded-md font-medium transition-colors",
       isActive
-        ? "bg-white text-egypt-blue shadow-sm"
-        : "text-white/90 hover:text-select-yellow"
+        ? "bg-white/20 text-select-yellow"
+        : "text-white/90 hover:text-white hover:bg-white/10"
     ].join(" ");
-
-  // Mobile link styling, larger and padded
-  const mobileLink = ({ isActive }) =>
-    [
-      "px-3 py-2 rounded-md text-lg font-medium transition",
-      isActive
-        ? "bg-white/10 border-l-4 border-select-yellow text-white"
-        : "text-white/90 hover:text-select-yellow"
-    ].join(" ");
-
-  const NavItem = ({ to, children }) => (
-    <NavLink
-      to={to}
-      className={desktopLink}
-      aria-current={({ isActive }) => (isActive ? "page" : undefined)}
-    >
-      {children}
-    </NavLink>
-  );
 
   return (
-    <header className="sticky top-0 z-40 bg-gradient-to-br from-egypt-blue to-teal-700 text-white shadow">
-      <nav className="container mx-auto h-16 px-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-bold text-2xl">
-          <img src="/favicon2.png" alt="logo" className="h-8" />
-          EndoDetect
-        </Link>
-
-        {/* Desktop links */}
-        <ul className="hidden md:flex gap-4 items-center">
+    <header className="relative text-white bg-egypt-blue shadow border-b border-white/20">
+      <nav className="container mx-auto h-12 px-4 flex items-center justify-between">
+        {/* Brand + desktop links */}
+        <div className="flex items-center gap-16">
+          <Link to="/" className="flex items-center gap-2 font-bold text-xl">
+            <img src="/favicon2.png" alt="logo" className="h-6" />
+            EndoDetect
+          </Link>
           {displayName && (
-            <>
-              <li><NavItem to="/diagnosis">Diagnostic</NavItem></li>
-              <li><NavItem to="/analytic">Analytics</NavItem></li>
-              <li><NavItem to="/profile">Profile</NavItem></li>
-              <li><NavItem to="/history">History</NavItem></li>
-              {profile?.is_admin && (
-                <li><NavItem to="/admin">Admin</NavItem></li>
-              )}
-            </>
+            <div className="flex items-center gap-4">
+              <NavLink to="/diagnosis" className={navLinkStyle}>
+                Diagnostic
+              </NavLink>
+              <NavLink to="/analytic" className={navLinkStyle}>
+                Analytics
+              </NavLink>
+            </div>
           )}
-        </ul>
+        </div>
 
-        {/* Desktop auth */}
-        <div className="hidden md:flex items-center gap-5">
+        {/* Desktop auth with dropdown */}
+        <div className="hidden md:flex items-center gap-5 relative">
           {displayName ? (
-            <>
-              <span className="text-select-yellow font-semibold text-base truncate max-w-[200px]">
-                Hello {displayName}
-              </span>
+            <div className="relative">
               <button
-                onClick={handleLogout}
-                className="bg-red-600 text-white px-5 py-2 rounded-2xl font-semibold text-base hover:bg-red-700"
+                onClick={() => setUserMenuOpen(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium bg-white/20 hover:bg-white/30"
               >
-                Logout
+                Hello {displayName} <span className="opacity-80">▾</span>
               </button>
-            </>
+
+              {userMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-48 bg-white text-slate-800 rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden z-50 text-sm"
+                >
+                  <NavLink to="/profile" onClick={() => setUserMenuOpen(false)} className="block px-4 py-1.5 hover:bg-slate-100">
+                    Profile
+                  </NavLink>
+                  <NavLink to="/history" onClick={() => setUserMenuOpen(false)} className="block px-4 py-1.5 hover:bg-slate-100">
+                    History
+                  </NavLink>
+                  {profile?.is_admin && (
+                    <NavLink to="/admin" onClick={() => setUserMenuOpen(false)} className="block px-4 py-1.5 hover:bg-slate-100">
+                      Admin
+                    </NavLink>
+                  )}
+                  <button
+                    onClick={() => { setUserMenuOpen(false); handleLogout(); }}
+                    className="block w-full text-left px-4 py-2 hover:bg-red-50 text-red-600"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <Link
               to="/login"
-              className="bg-select-yellow text-egypt-blue px-5 py-2 rounded-2xl font-semibold text-base hover:opacity-90"
+              className="bg-select-yellow text-egypt-blue px-4 py-1.5 rounded-xl font-medium text-sm hover:opacity-90"
             >
               Login
             </Link>
@@ -121,8 +125,8 @@ export default function NavBar() {
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-lg"
-          onClick={() => setOpen((v) => !v)}
+          className="md:hidden px-3 py-2 rounded-lg text-lg bg-white/10 hover:bg-white/20"
+          onClick={() => setOpen(v => !v)}
           aria-label="Toggle menu"
           aria-expanded={open}
         >
@@ -136,16 +140,16 @@ export default function NavBar() {
           <div className="container mx-auto px-4 py-4 flex flex-col gap-3">
             {displayName ? (
               <>
-                <NavLink to="/diagnosis" className={mobileLink} onClick={()=>setOpen(false)}>Diagnostic</NavLink>
-                <NavLink to="/analytic"  className={mobileLink} onClick={()=>setOpen(false)}>Analytics</NavLink>
-                <NavLink to="/profile"   className={mobileLink} onClick={()=>setOpen(false)}>Profile</NavLink>
-                <NavLink to="/history"   className={mobileLink} onClick={()=>setOpen(false)}>History</NavLink>
+                <NavLink to="/diagnosis" className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Diagnostic</NavLink>
+                <NavLink to="/analytic"  className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Analytics</NavLink>
+                <NavLink to="/profile"   className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Profile</NavLink>
+                <NavLink to="/history"   className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>History</NavLink>
                 {profile?.is_admin && (
-                  <NavLink to="/admin" className={mobileLink} onClick={()=>setOpen(false)}>Admin</NavLink>
+                  <NavLink to="/admin" className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Admin</NavLink>
                 )}
                 <button
                   onClick={() => { setOpen(false); handleLogout(); }}
-                  className="mt-2 bg-red-600 text-white px-5 py-2 rounded-2xl font-semibold text-lg hover:bg-red-700"
+                  className="mt-2 bg-red-600 text-white px-5 py-2 rounded-xl font-semibold text-base hover:bg-red-700"
                 >
                   Logout
                 </button>
@@ -154,7 +158,7 @@ export default function NavBar() {
               <Link
                 to="/login"
                 onClick={()=>setOpen(false)}
-                className="bg-select-yellow text-egypt-blue px-5 py-2 rounded-2xl font-semibold text-lg hover:opacity-90"
+                className="bg-select-yellow text-egypt-blue px-5 py-2 rounded-xl font-semibold text-base hover:opacity-90"
               >
                 Login
               </Link>
