@@ -53,10 +53,12 @@ MASKRCNN_SCORE_THRESH = 0.75
 MASKRCNN_MASK_THRESH = 0.5
 
 # U-Net (SMP)
-UNET_WEIGHTS = "./model/unetpp_effb7_adam.pth"
+UNET_WEIGHTS   = "./model/unet_effb7_adam.pth"
+UNETPP_WEIGHTS = "./model/unetpp_effb7_adam.pth"
 UNET_ENCODER_NAME = "efficientnet-b7"
-UNET_INPUT_SIZE   = (256, 256)    # (W,H)
+UNET_INPUT_SIZE   = (256, 256)  # (W,H)
 UNET_THRESHOLD    = 0.75
+
 
 TASK_DETECTION     = "detection"
 TASK_SEG_INSTANCE  = "segmentation_instance"
@@ -74,16 +76,56 @@ def now_utc7():
 # =========================
 
 AVAILABLE_MODELS = {
-    "yolo_9t": {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_9T)},
+    "yolo_9t":  {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_9T)},
     "yolo_11n": {"task": TASK_DETECTION, "model": YOLO(YOLO_WEIGHTS_11N)},
     "maskrcnn": {"task": TASK_SEG_INSTANCE, "model": None, "weights": MASKRCNN_WEIGHTS},
     "unet":     {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
-    "unetpp":   {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNET_WEIGHTS},
+    "unetpp":   {"task": TASK_SEG_SEMANTIC, "model": None, "weights": UNETPP_WEIGHTS},
 }
 
+# ==== CHANGED: helper to force names -> "polyp"
+def _force_polyp_names(names):
+    try:
+        if isinstance(names, dict):
+            return {k: "polyp" for k in names.keys()}
+        if isinstance(names, (list, tuple)):
+            return ["polyp"] * len(names)
+    except Exception:
+        pass
+    return {0: "polyp"}
+
 for k, v in AVAILABLE_MODELS.items():
-    if v["model"] is not None and hasattr(v["model"], "eval"):
-        v["model"].eval()
+    m = v.get("model")
+    if m is not None and hasattr(m, "eval"):
+        # ==== CHANGED: make YOLO models display "polyp" on overlays by default
+        if v.get("task") == TASK_DETECTION and hasattr(m, "names"):
+            try:
+                m.names = _force_polyp_names(m.names)
+            except Exception:
+                pass
+        m.eval()
+
+def _area_pct_from_det(det, img_w, img_h):
+    """Return % of image covered by the lesion (mask preferred, else bbox)."""
+    if not img_w or not img_h:
+        return None
+    a = det.get("mask_area_px")
+    if a is None:
+        a = det.get("bbox_area_px")
+    if not a:
+        return None
+    return 100.0 * float(a) / float(img_w * img_h)
+
+def _size_class_from_area_pct(area_pct):
+    """Map coverage % to clinically meaningful size bins (proxy for diameter)."""
+    if area_pct is None:
+        return "unknown"
+    if area_pct < 2.0:
+        return "diminutive (≤5 mm est.)"
+    if area_pct < 6.0:
+        return "small (6–9 mm est.)"
+    return "large (≥10 mm est.)"
+
 
 
 # =========================
@@ -136,6 +178,7 @@ def _ensure_loaded(name: str):
         entry["model"] = load_unet(entry["weights"], use_plusplus=True)
     else:
         raise HTTPException(status_code=500, detail=f"Unknown lazy model '{name}'")
+    
 
 # =========================
 # Rendering & result utils
@@ -186,14 +229,38 @@ def build_summary(dets, img_w, img_h, timing_ms=None):
     class_counts = Counter([d.get("class_name", "polyp") for d in dets])
     confs = [d.get("confidence") for d in dets if d.get("confidence") is not None]
     confs = [c for c in confs if c is not None]
+
+    # ---- Clinical-only distilled view
+    lesions = []
+    area_pcts = []
+    for d in dets:
+        ap = _area_pct_from_det(d, img_w, img_h)
+        area_pcts.append(ap if ap is not None else 0.0)
+        lesions.append({
+            "id": d.get("detection_id"),
+            "confidence": float(d.get("confidence") or 0.0),
+            "size_class": _size_class_from_area_pct(ap),
+            "area_pct": float(ap) if ap is not None else None,
+        })
+    largest_ap = max(area_pcts) if area_pcts else 0.0
+
+    clinical = {
+        "polyp_count": len(dets),
+        "largest_lesion_area_pct": float(largest_ap),
+        "lesions": lesions,
+        # (keep room for future fields like image_quality, NICE-type, etc.)
+    }
+
     return {
         "num_detections": len(dets),
         "class_counts": dict(class_counts),
         "confidence_mean": float(np.mean(confs)) if confs else 0.0,
         "confidence_max": float(np.max(confs)) if confs else 0.0,
-        "image_size": {"width": int(img_w), "height": int(img_h)},
-        "time_ms": timing_ms or {}
+        "image_size": {"width": int(img_w or 0), "height": int(img_h or 0)},
+        "time_ms": timing_ms or {},
+        "clinical": clinical,   # ✅ add this
     }
+
 
 
 # =========================
@@ -258,10 +325,16 @@ def predict_maskrcnn(model, pil_img, score_thresh: float = MASKRCNN_SCORE_THRESH
 
 
 def predict_unet(model, pil_img, thresh: float = UNET_THRESHOLD, class_idx: int = 0):
+    """
+    Returns per-lesion (component) detections for semantic segmentation.
+    - Confidence per lesion = mean(prob) within that component
+    - Area uses pixel count of the component at original resolution
+    """
     img = pil_img.convert("RGB")
     H, W = img.height, img.width
     rgb = np.array(img)
 
+    # ----- forward pass on resized image
     resized = cv2.resize(rgb, UNET_INPUT_SIZE, interpolation=cv2.INTER_LINEAR)
     x = resized.astype(np.float32) / 255.0
     x = np.transpose(x, (2, 0, 1))[None, ...]
@@ -277,21 +350,41 @@ def predict_unet(model, pil_img, thresh: float = UNET_THRESHOLD, class_idx: int 
             probs_all = torch.softmax(out, dim=1)[0].cpu().numpy()
             probs_small = probs_all[class_idx]
 
+    # ----- upsample probabilities & binarize
     probs = cv2.resize(probs_small, (W, H), interpolation=cv2.INTER_LINEAR)
     mask_bin = (probs >= float(thresh)).astype(np.uint8)
-    overlay = draw_mask_overlay(np.array(img), mask_bin)
 
+    # ----- split into connected components (each = 1 polyp)
     dets = []
-    area = int(mask_bin.sum())
-    if area > 0:
+    component_mask = mask_bin.copy()
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(component_mask, connectivity=8)
+
+    # label 0 is background
+    for label in range(1, num_labels):
+        area_px = int(stats[label, cv2.CC_STAT_AREA])
+        if area_px <= 0:
+            continue
+
+        comp_bin = (labels == label).astype(np.uint8)
+
+        # per-component confidence = mean prob inside the component
+        comp_probs = probs[labels == label]
+        conf = float(comp_probs.mean()) if comp_probs.size > 0 else 0.0
+
+        # polygons for the component
+        polys = _mask_to_polygons(comp_bin)
+
         dets.append({
-            "detection_id": 0,
+            "detection_id": len(dets),
             "class_id": 0,
             "class_name": "polyp",
-            "confidence": float(probs[mask_bin == 1].mean()),
-            "mask_area_px": area,
-            "mask_polygons": _mask_to_polygons(mask_bin)
+            "confidence": conf,
+            "mask_area_px": area_px,
+            "mask_polygons": polys
         })
+
+    # overlay still shows the union (nice & simple); keep as-is
+    overlay = draw_mask_overlay(np.array(img), mask_bin)
 
     summary = build_summary(dets, W, H)
     result = {
@@ -301,6 +394,7 @@ def predict_unet(model, pil_img, thresh: float = UNET_THRESHOLD, class_idx: int 
         "summary": summary
     }
     return overlay, result
+
 
 # ==== YOLO -> result dict =====================================================
 
@@ -341,7 +435,10 @@ def yolo_result_to_dict(res, class_names):
             cx, cy, bw, bh  = [float(v) for v in xywh[i].tolist()]
             c  = float(conf[i])
             ci = int(cls[i])
-            name = _safe_class_name(class_names, ci)
+
+            # ==== CHANGED: force name to "polyp" (JSON output)
+            # name = _safe_class_name(class_names, ci)
+            name = "polyp"
 
             bbox_area_px = int(max(bw, 0.0) * max(bh, 0.0))
             aspect_ratio = float(bw / bh) if bh > 0 else None
@@ -726,9 +823,23 @@ async def upload(
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         if task == TASK_DETECTION:
+            # ==== CHANGED: ensure model + result names are "polyp" so res.plot() uses it
+            if hasattr(model, "names"):
+                try:
+                    model.names = _force_polyp_names(model.names)
+                except Exception:
+                    pass
+
             preds = model.predict(image, verbose=False, iou=0.3)
             res = preds[0]
-            result_dict = yolo_result_to_dict(res, model.names)
+
+            try:
+                res.names = _force_polyp_names(getattr(res, "names", getattr(model, "names", {})))
+            except Exception:
+                pass
+
+            result_dict = yolo_result_to_dict(res, res.names)
+
             rendered_bgr = res.plot()  # BGR
             rendered_rgb = cv2.cvtColor(rendered_bgr, cv2.COLOR_BGR2RGB)
             processed_img = Image.fromarray(rendered_rgb)
