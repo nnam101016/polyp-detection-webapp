@@ -1,16 +1,17 @@
-// ImageCompare.js
+// src/components/ImageCompare.js
+import React from "react";
 import ReactCompareImage from "react-compare-image";
 
-const ImageCompare = ({ originalUrl, processedUrl }) => {
+export default function ImageCompare({ originalUrl, processedUrl }) {
   return (
-    <div className="w-60 border rounded shadow bg-white p-2">
+    <div className="w-full rounded overflow-hidden shadow">
       <ReactCompareImage
         leftImage={originalUrl}
         rightImage={processedUrl}
-        sliderLineColor="#00AEEF"
+        sliderLineColor="#3b82f6"   // Tailwind blue-500
+        handleSize={42}             // slightly bigger handle
+        sliderLineWidth={3}
       />
     </div>
   );
-};
-
-export default ImageCompare;
+}

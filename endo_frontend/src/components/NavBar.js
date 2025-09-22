@@ -1,16 +1,8 @@
-//Navigation Bar to move between pages
+// src/components/NavBar.js
+import React, { useEffect, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import API from "../api";
 
-<<<<<<< Updated upstream
-function NavBar(){
-    return (
-        <nav className="bg-sky-800 p-4">
-            <div className="container mx-auto flex justify-between items-center">
-                <div className="text-white text-5xl font-bold">EndoDetect</div>
-                <div className="space-x-4 text-xl">
-                <a href="/diagnostic" className="text-gray-300 hover:text-white">Diagnostic</a>
-                <a href="/analytic" className="text-gray-300 hover:text-white">Analytic</a>
-                <a href="/showcase" className="text-gray-300 hover:text-white">Showcase</a>
-=======
 export default function NavBar() {
   const [profile, setProfile] = useState(null);
   const [open, setOpen] = useState(false); // mobile menu
@@ -76,9 +68,9 @@ export default function NavBar() {
               <NavLink to="/diagnosis" className={navLinkStyle}>
                 Diagnostic
               </NavLink>
-              {/* <NavLink to="/analytic" className={navLinkStyle}>
+              <NavLink to="/analytic" className={navLinkStyle}>
                 Analytics
-              </NavLink> */}
+              </NavLink>
             </div>
           )}
         </div>
@@ -118,11 +110,62 @@ export default function NavBar() {
                   >
                     Logout
                   </button>
->>>>>>> Stashed changes
                 </div>
+              )}
             </div>
-        </nav>
-    );
-}
+          ) : (
+            <Link
+              to="/login"
+              className="bg-select-yellow text-egypt-blue px-4 py-1.5 rounded-xl font-medium text-sm hover:opacity-90"
+            >
+              Login
+            </Link>
+          )}
+        </div>
 
-export default NavBar;
+        {/* Mobile hamburger */}
+        <button
+          className="md:hidden px-3 py-2 rounded-lg text-lg bg-white/10 hover:bg-white/20"
+          onClick={() => setOpen(v => !v)}
+          aria-label="Toggle menu"
+          aria-expanded={open}
+        >
+          ☰
+        </button>
+      </nav>
+
+      {/* Mobile sheet */}
+      {open && (
+        <div className="md:hidden bg-egypt-blue/95 border-t border-white/10">
+          <div className="container mx-auto px-4 py-4 flex flex-col gap-3">
+            {displayName ? (
+              <>
+                <NavLink to="/diagnosis" className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Diagnostic</NavLink>
+                <NavLink to="/analytic"  className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Analytics</NavLink>
+                <NavLink to="/profile"   className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Profile</NavLink>
+                <NavLink to="/history"   className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>History</NavLink>
+                {profile?.is_admin && (
+                  <NavLink to="/admin" className="px-3 py-2 rounded-md text-lg font-medium transition text-white hover:text-select-yellow" onClick={()=>setOpen(false)}>Admin</NavLink>
+                )}
+                <button
+                  onClick={() => { setOpen(false); handleLogout(); }}
+                  className="mt-2 bg-red-600 text-white px-5 py-2 rounded-xl font-semibold text-base hover:bg-red-700"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                onClick={()=>setOpen(false)}
+                className="bg-select-yellow text-egypt-blue px-5 py-2 rounded-xl font-semibold text-base hover:opacity-90"
+              >
+                Login
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}

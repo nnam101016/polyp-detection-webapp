@@ -1,3 +1,66 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom components (after the three @tailwind lines) */
+@layer components {
+  .bar-style {
+    /* safe utilities via @apply */
+    @apply w-full flex flex-wrap gap-2 items-center justify-between;
+
+    /* custom bits via theme()/plain CSS */
+    background-color: theme('colors.egypt-blue');
+    color: theme('colors.clear-sky');
+    height: 30vh; /* instead of @apply h-[12vh] */
+  }
+
+  .button-enlarge {
+    @apply rounded-full w-fit p-4 text-lg font-bold;
+    background-color: theme('colors.select-yellow');
+    color: theme('colors.egypt-blue');
+  }
+
+  .button-enlarge:hover {
+    @apply scale-110 transition-transform duration-200 ease-in-out;
+  }
+
+  .button-border {
+    @apply rounded-full w-fit p-4 text-lg font-bold border-2;
+    border-color: theme('colors.egypt-blue');
+    background-color: transparent;
+    color: theme('colors.egypt-blue');
+  }
+
+  .button-border:hover {
+    @apply transition duration-200 ease-in-out;
+    background-color: theme('colors.egypt-blue');
+    color: #fff;
+  }
+
+  .panel-sky {
+    @apply rounded-2xl;
+    background-color: theme('colors.clear-sky');
+  }
+
+  .panel-yellow {
+    @apply rounded-2xl;
+    background-color: theme('colors.select-yellow');
+  }
+}
+
+/* your keyframes unchanged */
+@keyframes next {
+  from { transform: translateX(0px); }
+  to   { transform: translateX(calc(0px + var(--cardWidth))); }
+}
+@keyframes prev {
+  from { transform: translateX(0px); }
+  to   { transform: translateX(calc(0px - var(--cardWidth))); }
+}
+
+/* make the root stretch and remove default margins */
+html, body, #root { height: 100%; }
+body { margin: 0; }
+
+/* optional: if you want the whole app to have gray bg behind pages */
+body { background: #f3f4f6; } /* Tailwind's bg-gray-100 */
